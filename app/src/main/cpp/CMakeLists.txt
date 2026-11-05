@@ -15,7 +15,7 @@ libxaac_add_definitions()
 include("${XAAC_ROOT}/common/common.cmake")
 include("${XAAC_ROOT}/encoder/libxaacenc.cmake")
 
-add_library(xhe_jni SHARED jni_bridge.c)
+add_library(xhe_jni SHARED jni_bridge.c usac_encoder.c)
 target_include_directories(xhe_jni PRIVATE
     "${XAAC_ROOT}/encoder"
     "${XAAC_ROOT}/common"
