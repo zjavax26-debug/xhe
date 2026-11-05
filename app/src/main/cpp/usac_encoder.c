@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "ixheaac_type_def.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaace_api.h"
 #include "ixheaace_loudness_measurement.h"
 #include "ixheaac_constants.h"
@@ -190,7 +191,8 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
     if (!meta) { snprintf(message, sizeof(message), "No se pudo crear el índice de tramas"); goto cleanup; }
 
     UWORD32 frame_count = 0;
-    UWORD32 frame_bytes[100000];
+    UWORD32 *frame_bytes = (UWORD32 *)calloc((size_t)out->expected_frame_count + 2U, sizeof(UWORD32));
+    if (!frame_bytes) { snprintf(message, sizeof(message), "Memoria insuficiente para el índice"); goto cleanup; }
     size_t read_bytes;
     while ((read_bytes = fread(input, 1, (size_t)out->input_size, wav)) > 0) {
         if (read_bytes < (size_t)out->input_size)
@@ -198,7 +200,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
         IA_ERRORCODE err = ixheaace_process(out->pv_ia_process_api_obj, (pVOID)in, (pVOID)out);
         if (err != 0) { snprintf(message, sizeof(message), "Error de libxaac durante la trama (%d)", (int)err); goto cleanup; }
         if (out->i_out_bytes > 0) {
-            if (frame_count >= 100000 || fwrite(encoded, 1, (size_t)out->i_out_bytes, raw) != (size_t)out->i_out_bytes) {
+            if (frame_count >= (UWORD32)out->expected_frame_count + 2U || fwrite(encoded, 1, (size_t)out->i_out_bytes, raw) != (size_t)out->i_out_bytes) {
                 snprintf(message, sizeof(message), "Error al guardar las tramas USAC"); goto cleanup;
             }
             frame_bytes[frame_count++] = (UWORD32)out->i_out_bytes;
@@ -209,6 +211,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
             sampleRate, channels, bitrateKbps * 1000, frame_count);
     for (UWORD32 i = 0; i < frame_count; i++) fprintf(meta, "frame_size=%u\n", frame_bytes[i]);
     fflush(raw); fflush(meta);
+    free(frame_bytes);
     snprintf(message, sizeof(message), "Flujo USAC generado (%u tramas). Aún no es un archivo M4A.", frame_count);
 
 cleanup:
