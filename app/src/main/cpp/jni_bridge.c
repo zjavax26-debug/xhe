@@ -7,7 +7,7 @@ JNIEXPORT jstring JNICALL
 Java_com_xhe_audioconverter_MainActivity_nativeEncoderVersion(JNIEnv *env, jclass clazz) {
     ixheaace_version version = {0};
     (void) clazz;
-    if (ixheaace_get_lib_id_strings((pVOID)&version) != IA_NO_ERROR ||
+    if (ixheaace_get_lib_id_strings((pVOID)&version) != 0 ||
         version.p_lib_name == NULL || version.p_version_num == NULL) {
         return (*env)->NewStringUTF(env, "libxaac no disponible");
     }
