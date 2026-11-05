@@ -24,6 +24,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     static { System.loadLibrary("xhe_jni"); }
     private static native String nativeEncoderVersion();
+    private static native String nativeEncoderProbe(int sampleRate, int channels, int bitrate);
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
