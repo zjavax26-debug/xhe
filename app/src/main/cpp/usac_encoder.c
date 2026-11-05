@@ -185,9 +185,14 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
 
     raw = fopen(out_path, "wb");
     if (!raw) { snprintf(message, sizeof(message), "No se pudo crear el flujo USAC"); goto cleanup; }
-    if (out->i_out_bytes > 0 && fwrite(encoded, 1, (size_t)out->i_out_bytes, raw) != (size_t)out->i_out_bytes) {
-        snprintf(message, sizeof(message), "Error al escribir cabecera USAC"); goto cleanup;
+    const WORD32 decoder_config_bytes = out->i_out_bytes;
+    if (decoder_config_bytes < 0 ||
+        (decoder_config_bytes > 0 && fwrite(encoded, 1, (size_t)decoder_config_bytes, raw) != (size_t)decoder_config_bytes)) {
+        snprintf(message, sizeof(message), "Error al escribir configuración inicial USAC"); goto cleanup;
     }
+    const WORD32 media_timescale = out->samp_freq /
+            (out->down_sampling_ratio > 0 ? out->down_sampling_ratio : 1);
+    const UWORD32 play_time_samples = (UWORD32)pcm_size / (2U * (UWORD32)channels);
     snprintf(meta_path, sizeof(meta_path), "%s.txt", out_path);
     meta = fopen(meta_path, "w");
     if (!meta) { snprintf(message, sizeof(message), "No se pudo crear el índice de tramas"); goto cleanup; }
@@ -229,9 +234,16 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
                  frame_count, out->expected_frame_count);
         goto cleanup;
     }
-    fprintf(meta, "sample_rate=%d\nchannels=%d\nbitrate=%d\nframes=%u\n",
-            sampleRate, channels, bitrateKbps * 1000, frame_count);
-    for (UWORD32 i = 0; i < frame_count; i++) fprintf(meta, "frame_size=%u\n", frame_bytes[i]);
+    /* Match the metadata contract emitted by the official libxaac testbench. */
+    fprintf(meta, "-dec_info_init:%d\n", decoder_config_bytes);
+    fprintf(meta, "-g_track_count:%d\n", 1);
+    fprintf(meta, "-ia_mp4_stsz_entries:%u\n", frame_count);
+    fprintf(meta, "-movie_time_scale:%d\n", media_timescale);
+    fprintf(meta, "-media_time_scale:%d\n", media_timescale);
+    fprintf(meta, "-playTimeInSamples:%u\n", play_time_samples);
+    fprintf(meta, "-startOffsetInSamples:%d\n-useEditlist:%d\n", 0, 1);
+    for (UWORD32 i = 0; i < frame_count; i++)
+        fprintf(meta, "-ia_mp4_stsz_size:%u\n", frame_bytes[i]);
     fflush(raw); fflush(meta);
     snprintf(message, sizeof(message), "Flujo USAC generado (%u tramas). Aún no es un archivo M4A.", frame_count);
 
