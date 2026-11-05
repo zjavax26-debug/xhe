@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private SeekBar bitrateSlider;
     private EditText bitrateInput;
     private Button convertButton;
+    private TextView engineStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,9 +45,9 @@ public class MainActivity extends Activity {
         try {
             String engine = nativeEncoderVersion();
             String probe = nativeEncoderProbe(48000, 2, 64000);
-            Toast.makeText(this, engine + " · " + probe, Toast.LENGTH_LONG).show();
+            engineStatus.setText("Motor: " + engine + "\\n" + probe);
         } catch (UnsatisfiedLinkError error) {
-            Toast.makeText(this, "No se pudo cargar libxaac", Toast.LENGTH_LONG).show();
+            engineStatus.setText("No se pudo cargar libxaac");
         }
     }
 
@@ -137,6 +138,11 @@ public class MainActivity extends Activity {
         note.setTextColor(0xFF8A4B00);
         note.setPadding(0, dp(16), 0, dp(12));
         root.addView(note);
+
+        engineStatus = text("Comprobando motor xHE-AAC…", 13, false);
+        engineStatus.setTextColor(0xFF555555);
+        engineStatus.setPadding(0, dp(8), 0, dp(12));
+        root.addView(engineStatus);
 
         convertButton = new Button(this);
         convertButton.setText("CONVERTIR A M4A");
