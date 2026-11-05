@@ -14,7 +14,6 @@
 #include "impd_drc_uni_drc.h"
 #include "impd_drc_tables.h"
 #include "impd_drc_api.h"
-#include "impd_drc_user_config.h"
 
 static pVOID xhe_alloc(UWORD32 size, UWORD32 alignment) {
     void *ptr = NULL;
