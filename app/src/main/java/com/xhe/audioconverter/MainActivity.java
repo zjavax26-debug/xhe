@@ -44,8 +44,8 @@ public class MainActivity extends Activity {
         buildInterface();
         try {
             String engine = nativeEncoderVersion();
-            String probe = nativeEncoderProbe(48000, 2, 64000);
-            engineStatus.setText("Motor: " + engine + "\n" + probe);
+            engineStatus.setText("Motor: " + engine
+                    + "\nPrueba de codificación USAC: pendiente");
         } catch (UnsatisfiedLinkError error) {
             engineStatus.setText("No se pudo cargar libxaac");
         }
