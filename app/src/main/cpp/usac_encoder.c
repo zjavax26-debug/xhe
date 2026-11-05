@@ -194,20 +194,40 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
     UWORD32 frame_count = 0;
     frame_bytes = (UWORD32 *)calloc((size_t)out->expected_frame_count + 2U, sizeof(UWORD32));
     if (!frame_bytes) { snprintf(message, sizeof(message), "Memoria insuficiente para el índice"); goto cleanup; }
-    size_t read_bytes;
-    while ((read_bytes = fread(input, 1, (size_t)out->input_size, wav)) > 0) {
-        if (read_bytes < (size_t)out->input_size)
+    /*
+     * Match the official libxaac testbench input cadence. With delay
+     * adjustment enabled, input is advanced on every process call; otherwise
+     * it advances only after an output access unit is produced.
+     */
+    size_t read_bytes = fread(input, 1, (size_t)out->input_size, wav);
+    while (read_bytes > 0 && frame_count < (UWORD32)out->expected_frame_count) {
+        if (read_bytes != (size_t)out->input_size)
             memset((UWORD8 *)input + read_bytes, 0, (size_t)out->input_size - read_bytes);
+
         IA_ERRORCODE err = ixheaace_process(out->pv_ia_process_api_obj, (pVOID)in, (pVOID)out);
-        if (err != 0) { snprintf(message, sizeof(message), "Error de libxaac durante la trama (%d)", (int)err); goto cleanup; }
+        if (err != 0) {
+            snprintf(message, sizeof(message), "Error de libxaac durante la trama (%d)", (int)err);
+            goto cleanup;
+        }
+
         if (out->i_out_bytes > 0) {
-            if (frame_count >= (UWORD32)out->expected_frame_count + 2U || fwrite(encoded, 1, (size_t)out->i_out_bytes, raw) != (size_t)out->i_out_bytes) {
-                snprintf(message, sizeof(message), "Error al guardar las tramas USAC"); goto cleanup;
+            if (fwrite(encoded, 1, (size_t)out->i_out_bytes, raw) != (size_t)out->i_out_bytes) {
+                snprintf(message, sizeof(message), "Error al guardar las tramas USAC");
+                goto cleanup;
             }
             frame_bytes[frame_count++] = (UWORD32)out->i_out_bytes;
+            if (!in->use_delay_adjustment)
+                read_bytes = fread(input, 1, (size_t)out->input_size, wav);
         }
+        if (in->use_delay_adjustment)
+            read_bytes = fread(input, 1, (size_t)out->input_size, wav);
     }
-    if (ferror(wav) || frame_count == 0) { snprintf(message, sizeof(message), "No se generaron tramas USAC"); goto cleanup; }
+    if (ferror(wav) || frame_count == 0 ||
+        frame_count != (UWORD32)out->expected_frame_count) {
+        snprintf(message, sizeof(message), "Codificación incompleta: %u de %d tramas",
+                 frame_count, out->expected_frame_count);
+        goto cleanup;
+    }
     fprintf(meta, "sample_rate=%d\nchannels=%d\nbitrate=%d\nframes=%u\n",
             sampleRate, channels, bitrateKbps * 1000, frame_count);
     for (UWORD32 i = 0; i < frame_count; i++) fprintf(meta, "frame_size=%u\n", frame_bytes[i]);
