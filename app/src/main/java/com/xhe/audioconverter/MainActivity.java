@@ -14,6 +14,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -74,7 +75,7 @@ public class MainActivity extends Activity {
         root.addView(bitrateSlider, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
         bitrateSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) setBitrate(MIN_BITRATE_KBPS + progress, false);
+                if (fromUser) setBitrate(MIN_BITRATE_KBPS + progress, true);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) { }
             @Override public void onStopTrackingTouch(SeekBar seekBar) { }
@@ -132,7 +133,10 @@ public class MainActivity extends Activity {
         convertButton.setEnabled(false);
         root.addView(convertButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(54)));
 
-        setContentView(root);
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.addView(root);
+        setContentView(scrollView);
     }
 
     private void setBitrate(int value, boolean updateInput) {
