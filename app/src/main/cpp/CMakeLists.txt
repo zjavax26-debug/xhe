@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(xhe_audio_converter C)
+project(xhe_audio_converter C CXX)
 
 if(NOT DEFINED LIBXAAC_SOURCE_DIR OR NOT EXISTS "${LIBXAAC_SOURCE_DIR}/encoder/libxaacenc.cmake")
     message(FATAL_ERROR "LIBXAAC_SOURCE_DIR must point to a checked-out libxaac source tree")
