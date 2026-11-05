@@ -22,6 +22,8 @@ import android.widget.Toast;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
+    static { System.loadLibrary("xhe_jni"); }
+    private static native String nativeEncoderVersion();
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
@@ -38,6 +40,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         buildInterface();
+        try {
+            Toast.makeText(this, "Motor: " + nativeEncoderVersion(), Toast.LENGTH_LONG).show();
+        } catch (UnsatisfiedLinkError error) {
+            Toast.makeText(this, "No se pudo cargar libxaac", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void buildInterface() {
