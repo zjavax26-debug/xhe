@@ -113,6 +113,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
     ixheaace_input_config *in = &api.input_config;
     ixheaace_output_config *out = &api.output_config;
     int created = 0;
+    UWORD32 *frame_bytes = NULL;
 
     if (!wav) { snprintf(message, sizeof(message), "No se pudo abrir el WAV (%d)", errno); goto cleanup; }
     if (fseek(wav, 0, SEEK_END) != 0) { snprintf(message, sizeof(message), "No se pudo leer el WAV"); goto cleanup; }
@@ -191,7 +192,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
     if (!meta) { snprintf(message, sizeof(message), "No se pudo crear el índice de tramas"); goto cleanup; }
 
     UWORD32 frame_count = 0;
-    UWORD32 *frame_bytes = (UWORD32 *)calloc((size_t)out->expected_frame_count + 2U, sizeof(UWORD32));
+    frame_bytes = (UWORD32 *)calloc((size_t)out->expected_frame_count + 2U, sizeof(UWORD32));
     if (!frame_bytes) { snprintf(message, sizeof(message), "Memoria insuficiente para el índice"); goto cleanup; }
     size_t read_bytes;
     while ((read_bytes = fread(input, 1, (size_t)out->input_size, wav)) > 0) {
@@ -211,10 +212,10 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
             sampleRate, channels, bitrateKbps * 1000, frame_count);
     for (UWORD32 i = 0; i < frame_count; i++) fprintf(meta, "frame_size=%u\n", frame_bytes[i]);
     fflush(raw); fflush(meta);
-    free(frame_bytes);
     snprintf(message, sizeof(message), "Flujo USAC generado (%u tramas). Aún no es un archivo M4A.", frame_count);
 
 cleanup:
+    free(frame_bytes);
     if (created) ixheaace_delete((pVOID)out);
     if (in->pv_drc_cfg) xhe_free(in->pv_drc_cfg);
     if (meta) fclose(meta);
