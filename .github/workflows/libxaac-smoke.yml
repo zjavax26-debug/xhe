@@ -1,0 +1,71 @@
+name: Validate xHE-AAC encoder
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/libxaac-smoke.yml"
+      - "docs/codec-integration.md"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/libxaac-smoke.yml"
+      - "docs/codec-integration.md"
+
+jobs:
+  libxaac-host-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Checkout pinned libxaac source
+        uses: actions/checkout@v4
+        with:
+          repository: ittiam-systems/libxaac
+          ref: 2fbadd57bca46693b7a077bcf1513131106d960c
+          path: third_party/libxaac
+
+      - name: Configure libxaac
+        run: cmake -S third_party/libxaac -B third_party/libxaac/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build xHE-AAC encoder
+        run: cmake --build third_party/libxaac/build --target xaacenc --parallel 2
+
+      - name: Generate short PCM WAV test signal
+        run: |
+          python3 - <<'PY'
+          import math
+          import struct
+          import wave
+          rate = 48000
+          frames = rate
+          with wave.open("smoke-input.wav", "wb") as wav:
+              wav.setnchannels(2)
+              wav.setsampwidth(2)
+              wav.setframerate(rate)
+              samples = bytearray()
+              for i in range(frames):
+                  value = int(9000 * math.sin(2 * math.pi * 440 * i / rate))
+                  samples += struct.pack("<hh", value, value)
+              wav.writeframes(samples)
+          PY
+
+      - name: Encode as USAC (AOT 42)
+        run: |
+          ENCODER="$(find third_party/libxaac/build -type f -name xaacenc -perm -111 | head -n 1)"
+          test -n "$ENCODER"
+          "$ENCODER" -ifile:smoke-input.wav -ofile:smoke-output.usac -br:64000 -aot:42
+          test -s smoke-output.usac
+          echo "USAC smoke test produced $(stat -c%s smoke-output.usac) bytes"
+
+      - name: Upload raw USAC smoke-test output
+        uses: actions/upload-artifact@v4
+        with:
+          name: libxaac-usac-smoke-test
+          path: smoke-output.usac
