@@ -25,8 +25,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android NDK and CMake
+      - name: Set up Android SDK, NDK and CMake
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 cmake;3.22.1 ndk;27.0.12077973'
+
+      - name: Verify pinned libxaac checkout
+        run: |
+          test -f third_party/libxaac/encoder/libxaacenc.cmake
+          test -f third_party/libxaac/encoder/ixheaace_api.h
+          echo "Pinned libxaac source tree is present"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
