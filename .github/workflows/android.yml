@@ -44,6 +44,13 @@ jobs:
       - name: Build debug APK with native libxaac
         run: gradle :app:assembleDebug
 
+      - name: Verify xHE encoder is packaged in APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          unzip -l "$APK" | grep 'lib/arm64-v8a/libxhe_jni.so'
+          unzip -p "$APK" lib/arm64-v8a/libxhe_jni.so > /tmp/libxhe_jni.so
+          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+          "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only /tmp/libxhe_jni.so | grep 'ixheaace_get_lib_id_strings'
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
