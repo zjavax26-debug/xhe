@@ -131,7 +131,8 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
     in->aac_config.inv_quant = 2;
     in->aac_config.use_tns = 1;
     in->aac_config.noise_filling = 0;
-    in->aac_config.bitreservoir_size = 0;
+    /* Match libxaac testbench default: APP_BITRES_SIZE_CONFIG_PARAM_DEF_VALUE_LC (768). */
+    in->aac_config.bitreservoir_size = 768;
     in->aac_config.length = (WORD32)pcm_size;
     in->i_bitrate = bitrateKbps * 1000;
     in->ui_pcm_wd_sz = 16;
