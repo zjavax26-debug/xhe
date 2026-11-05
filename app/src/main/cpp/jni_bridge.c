@@ -1,17 +1,20 @@
 #include <jni.h>
-#include <stdint.h>
+#include <string.h>
+#include "ixheaac_type_def.h"
+#include "ixheaace_api.h"
 
-/*
- * Native integration checkpoint.
- *
- * The upstream libxaac encoder is linked into this Android library. The JNI
- * conversion entry point will be added after the encoder's public API memory
- * lifecycle and MP4/USAC sample-entry packaging are implemented and tested.
- * Do not report a successful conversion until that path is complete.
- */
-JNIEXPORT jint JNICALL
-Java_com_xhe_audioconverter_MainActivity_nativeEncoderStatus(JNIEnv *env, jclass clazz) {
-    (void) env;
+JNIEXPORT jstring JNICALL
+Java_com_xhe_audioconverter_MainActivity_nativeEncoderVersion(JNIEnv *env, jclass clazz) {
+    ixheaace_version version = {0};
     (void) clazz;
-    return 1; /* 1 = libxaac linked; conversion pipeline not yet enabled */
+    if (ixheaace_get_lib_id_strings((pVOID)&version) != IA_NO_ERROR ||
+        version.p_lib_name == NULL || version.p_version_num == NULL) {
+        return (*env)->NewStringUTF(env, "libxaac no disponible");
+    }
+    char description[256];
+    description[0] = '\0';
+    strncat(description, (const char *)version.p_lib_name, sizeof(description) - 1);
+    strncat(description, (const char *)version.p_version_num,
+            sizeof(description) - strlen(description) - 1);
+    return (*env)->NewStringUTF(env, description);
 }
