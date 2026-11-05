@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -59,7 +60,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncoderProbe(
     in->ui_pcm_wd_sz = 16;
     in->i_bitrate = bitrate;
     in->aot = AOT_USAC;
-    in->codec_mode = 0;
+    in->codec_mode = 1; /* USAC_ONLY_FD */
     in->i_channels = channels;
     in->i_samp_freq = sampleRate;
     in->i_native_samp_freq = sampleRate;
@@ -78,6 +79,9 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncoderProbe(
     in->aac_config.bandwidth = 0;
     in->random_access_interval = 1000;
     in->use_delay_adjustment = 0;
+    in->method_def = 0;
+    in->measured_loudness = -23.0;
+    in->sample_peak_level = -1.0;
 
     out->malloc_xheaace = xhe_aligned_alloc;
     out->free_xheaace = xhe_aligned_free;
