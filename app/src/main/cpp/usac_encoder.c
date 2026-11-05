@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <stdint.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +31,7 @@ static IA_ERRORCODE measure_wav_loudness(FILE *pcm, ixheaace_input_config *in,
     const UWORD32 samples_per_channel = in->i_samp_freq / 10;
     WORD16 **channels = NULL;
     pVOID handle = NULL;
-    IA_ERRORCODE err;
+    IA_ERRORCODE err = IA_NO_ERROR;
     WORD32 ch;
     if (samples_per_channel == 0 || in->aac_config.length < (WORD32)(samples_per_channel * in->i_channels * 2))
         return -1;
@@ -124,7 +125,6 @@ Java_com_xhe_audioconverter_MainActivity_nativeEncodeWav(
 
     in->pv_drc_cfg = xhe_alloc((UWORD32)sizeof(ia_drc_input_config), DEFAULT_MEM_ALIGN_8);
     if (!in->pv_drc_cfg) { snprintf(message, sizeof(message), "Memoria insuficiente para DRC"); goto cleanup; }
-    iaace_aac_set_default_config; /* Keep configuration setup local to the public API. */
     in->aac_config.bitrate = bitrateKbps * 1000;
     in->aac_config.bandwidth = 0;
     in->aac_config.inv_quant = 2;
