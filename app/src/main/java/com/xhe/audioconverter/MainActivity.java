@@ -42,7 +42,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         buildInterface();
         try {
-            Toast.makeText(this, "Motor: " + nativeEncoderVersion(), Toast.LENGTH_LONG).show();
+            String engine = nativeEncoderVersion();
+            String probe = nativeEncoderProbe(48000, 2, 64000);
+            Toast.makeText(this, engine + " · " + probe, Toast.LENGTH_LONG).show();
         } catch (UnsatisfiedLinkError error) {
             Toast.makeText(this, "No se pudo cargar libxaac", Toast.LENGTH_LONG).show();
         }
