@@ -42,15 +42,24 @@ jobs:
         run: sdkmanager "ndk;27.2.12479018"
 
 
-      - name: Add Android POSIX platform shim configuration
+      - name: Enable upstream POSIX shim for Android
         run: |
-          cat > /tmp/isomediafile-android-platform.cmake <<'EOF'
-          if(TARGET libisomediafile)
-            target_include_directories(libisomediafile PRIVATE "${CMAKE_CURRENT_LIST_DIR}/IsoLib/libisomediafile/linux")
-            target_sources(libisomediafile PRIVATE "${CMAKE_CURRENT_LIST_DIR}/IsoLib/libisomediafile/linux/SimpleFileMappingObject.c")
-            target_compile_definitions(libisomediafile PRIVATE LINUX)
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("/tmp/isobmff/IsoLib/libisomediafile/CMakeLists.txt")
+          s = p.read_text()
+          marker = "target_include_directories("
+          patch = """if(ANDROID)
+              target_sources(libisomediafile PRIVATE ${CMAKE_CURRENT_LIST_DIR}/linux/SimpleFileMappingObject.c)
+              target_include_directories(libisomediafile PRIVATE ${CMAKE_CURRENT_LIST_DIR}/linux)
+              target_compile_definitions(libisomediafile PRIVATE LINUX)
           endif()
-          EOF
+
+          """
+          if marker not in s:
+              raise SystemExit("Could not locate target_include_directories in upstream CMake")
+          p.write_text(s.replace(marker, patch + marker, 1))
+          PY
 
       - name: Configure Android ARM64 library build
         run: |
@@ -62,10 +71,6 @@ jobs:
             -DLIBISOMEDIAFILE_STRICT_WARNINGS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-          # Upstream CMake currently selects platform glue only for Linux,
-          # Windows and macOS. Android uses the Linux/POSIX file-mapping shim.
-          cmake -S /tmp/isobmff -B /tmp/isobmff-android-arm64 \
-            -DCMAKE_PROJECT_INCLUDE=/tmp/isomediafile-android-platform.cmake
 
       - name: Build Android ARM64 libisomediafile
         run: |
