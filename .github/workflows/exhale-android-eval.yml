@@ -96,6 +96,11 @@ jobs:
           print("mp4a sample entry and esds descriptor are present.")
           PY
 
+      - name: Set up Android SDK packages
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 cmake;3.22.1 ndk;27.2.12479018'
+
       - name: Install pinned Android NDK
         run: |
           yes | timeout 3m "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
