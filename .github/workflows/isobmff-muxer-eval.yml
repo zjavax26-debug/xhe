@@ -236,19 +236,6 @@ jobs:
               assert init is not None and len(sizes)==val("ia_mp4_stsz_entries") and init+sum(sizes)==raw_size
           PY
 
-      - name: Probe M4A with FFmpeg demuxer and decoder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          ffprobe -v error -show_entries format=format_name,duration -show_entries stream=codec_name,codec_tag_string,sample_rate,channels,duration,time_base -of default=noprint_wrappers=1 /tmp/isobmff-poc/genuine-usac.m4a | tee /tmp/ffprobe-usac.txt
-          set +e
-          ffmpeg -v warning -i /tmp/isobmff-poc/genuine-usac.m4a -f null - 2>/tmp/ffmpeg-usac-decode.log
-          status=$?
-          set -e
-          echo "FFmpeg decode exit status: $status"
-          cat /tmp/ffmpeg-usac-decode.log
-          if [ "$status" -eq 0 ]; then echo "FFmpeg accepted and decoded the M4A stream"; else echo "FFmpeg could not decode this USAC M4A; inspect diagnostics (not treated as a muxer pass)"; fi
-
       - name: Validate libxaac initialization bytes and access-unit table
         run: |
           python3 - <<'PY'
@@ -340,6 +327,19 @@ jobs:
           print(f"Real USAC M4A structure passed: boxes={kinds}, access_units={count}, mdat_payload={len(media_payload)} bytes, ASC={len(asc)} bytes")
           print("NOTE: byte-preservation and box structure are verified; independent USAC decode and exact per-AU timing remain separate gates.")
           PY
+
+      - name: Probe M4A with FFmpeg demuxer and decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffprobe -v error -show_entries format=format_name,duration -show_entries stream=codec_name,codec_tag_string,sample_rate,channels,duration,time_base -of default=noprint_wrappers=1 /tmp/isobmff-poc/genuine-usac.m4a | tee /tmp/ffprobe-usac.txt
+          set +e
+          ffmpeg -v warning -i /tmp/isobmff-poc/genuine-usac.m4a -f null - 2>/tmp/ffmpeg-usac-decode.log
+          status=$?
+          set -e
+          echo "FFmpeg decode exit status: $status"
+          cat /tmp/ffmpeg-usac-decode.log
+          if [ "$status" -eq 0 ]; then echo "FFmpeg accepted and decoded the M4A stream"; else echo "FFmpeg could not decode this USAC M4A; inspect diagnostics (not treated as a muxer pass)"; fi
 
       - name: Rebuild USAC elementary stream from M4A sample tables and decode it
         run: |
