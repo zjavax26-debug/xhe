@@ -95,7 +95,8 @@ jobs:
       - name: Build libxaac host encoder
         run: |
           cmake -S third_party/libxaac -B /tmp/libxaac-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/libxaac-build --target xaacenc --parallel 2
+          cmake --build /tmp/libxaac-build --target xaacenc xaacdec --parallel 2
+          find /tmp/libxaac-build -type f -name xaacdec -perm -111 -print -quit | grep -q .
 
       - name: Generate PCM and encode genuine USAC AOT 42
         run: |
@@ -115,6 +116,21 @@ jobs:
           "$ENCODER" -ifile:/tmp/usac-input.wav -ofile:/tmp/usac-output.usac -br:64000 -aot:42
           test -s /tmp/usac-output.usac
           test -s /tmp/usac-output.txt
+
+      - name: Decode genuine USAC elementary stream with libxaac decoder
+        run: |
+          DECODER="$(find /tmp/libxaac-build -type f -name xaacdec -perm -111 -print -quit)"
+          test -n "$DECODER"
+          "$DECODER" -ifile:/tmp/usac-output.usac -imeta:/tmp/usac-output.txt -ofile:/tmp/usac-decoded.wav -mp4:1
+          python3 - <<'PY'
+          import wave, pathlib
+          p = pathlib.Path("/tmp/usac-decoded.wav")
+          assert p.is_file() and p.stat().st_size > 44, "decoder produced no PCM WAV"
+          with wave.open(str(p), "rb") as w:
+              channels, rate, frames, width = w.getnchannels(), w.getframerate(), w.getnframes(), w.getsampwidth()
+          print(f"USAC decode passed: channels={channels}, rate={rate}, frames={frames}, sample_width={width}, duration={frames/rate:.6f}s")
+          assert channels == 2 and rate > 0 and frames > 0 and width in (2, 3, 4)
+          PY
 
       - name: Validate libxaac initialization bytes and access-unit table
         run: |
