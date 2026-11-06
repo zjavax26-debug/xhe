@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          LIB="$(find /tmp/isobmff-build -type f \\( -name 'liblibisomediafile.a' -o -name 'liblibisomediafile.so' \\) -print -quit)"
+          LIB="$(find /tmp/isobmff-build -type f -name 'liblibisomediafile.a' -print -quit)"
           test -n "$LIB"
           nm -g "$LIB" | grep -q ' MP4NewMovie$'
           nm -g "$LIB" | grep -q ' MP4NewSampleDescription$'
