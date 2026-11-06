@@ -162,6 +162,9 @@ jobs:
               print(f"TIMING input={frames} ({seconds:.2f}s) AU={coded_units} media_scale={val('media_time_scale')} play_samples={val('playTimeInSamples')} start_offset={val('startOffsetInSamples')} decoded={decoded}/{decoded_rate} ({decoded/decoded_rate:.6f}s) raw_bytes={pathlib.Path(usac).stat().st_size}")
           PY
 
+      - name: Install Python signal-analysis dependency
+        run: python3 -m pip install --user numpy
+
       - name: Measure decoded USAC signal alignment and end padding
         run: |
           python3 - <<'PY'
