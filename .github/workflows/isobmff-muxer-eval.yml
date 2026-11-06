@@ -132,6 +132,36 @@ jobs:
           assert channels == 2 and rate > 0 and frames > 0 and width in (2, 3, 4)
           PY
 
+      - name: Measure USAC encoder delay and padding across input durations
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave, subprocess, pathlib, re
+          enc=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacenc"))
+          dec=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacdec"))
+          for seconds in (0.25,0.5,1.0,1.5,2.0):
+              stem=f"/tmp/timing-{str(seconds).replace('.','_')}"
+              wav=stem+".wav"; usac=stem+".usac"; meta=stem+".txt"; out=stem+"-decoded.wav"
+              rate=48000; frames=round(rate*seconds)
+              with wave.open(wav,"wb") as w:
+                  w.setnchannels(2); w.setsampwidth(2); w.setframerate(rate)
+                  pcm=bytearray()
+                  for i in range(frames):
+                      v=int(9000*math.sin(2*math.pi*440*i/rate))
+                      pcm+=struct.pack("<hh",v,v)
+                  w.writeframes(pcm)
+              subprocess.run([str(enc),f"-ifile:{wav}",f"-ofile:{usac}","-br:64000","-aot:42"],check=True,stdout=subprocess.DEVNULL)
+              subprocess.run([str(dec),f"-ifile:{usac}",f"-imeta:{meta}",f"-ofile:{out}","-mp4:1"],check=True,stdout=subprocess.DEVNULL)
+              m=pathlib.Path(meta).read_text()
+              def val(k):
+                  x=re.search(r"^-"+re.escape(k)+r":(\d+)$",m,re.M)
+                  return int(x.group(1)) if x else None
+              sizes=re.findall(r"^-ia_mp4_stsz_size:(\d+)$",m,re.M)
+              with wave.open(out,"rb") as w:
+                  decoded=w.getnframes(); decoded_rate=w.getframerate()
+              coded_units=len(sizes)
+              print(f"TIMING input={frames} ({seconds:.2f}s) AU={coded_units} media_scale={val('media_time_scale')} play_samples={val('playTimeInSamples')} start_offset={val('startOffsetInSamples')} decoded={decoded}/{decoded_rate} ({decoded/decoded_rate:.6f}s) raw_bytes={pathlib.Path(usac).stat().st_size}")
+          PY
+
       - name: Validate libxaac initialization bytes and access-unit table
         run: |
           python3 - <<'PY'
