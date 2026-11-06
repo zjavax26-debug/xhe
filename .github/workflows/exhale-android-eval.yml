@@ -19,6 +19,12 @@ jobs:
       - name: Checkout app repository
         uses: actions/checkout@v4
 
+      - name: Checkout pinned libxaac source
+        uses: actions/checkout@v4
+        with:
+          repository: ittiam-systems/libxaac
+          ref: 2fbadd57bca46693b7a077bcf1513131106d960c
+          path: third_party/libxaac
       - name: Checkout pinned Exhale source
         uses: actions/checkout@v4
         with:
@@ -26,6 +32,16 @@ jobs:
           ref: fe9acb3f8739fc970dc6b86592f529bbe2f9036e
           path: third_party/exhale
 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
       - name: Install build and inspection tools
         run: |
           # Bound package-manager waits so a mirror/network stall cannot occupy a runner indefinitely.
@@ -114,6 +130,16 @@ jobs:
           NDK="$ANDROID_HOME/ndk/27.2.12479018"
           "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only build/exhale-jni-arm64/libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe'
 
+      - name: Build Android app with both native encoders
+        run: |
+          gradle :app:assembleDebug
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -l "$APK" | grep 'lib/arm64-v8a/libxhe_jni.so'
+          unzip -l "$APK" | grep 'lib/arm64-v8a/libexhale_jni.so'
+          unzip -p "$APK" lib/arm64-v8a/libexhale_jni.so > /tmp/app-libexhale_jni.so
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only /tmp/app-libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe'
       - name: Upload Exhale evaluation outputs
         uses: actions/upload-artifact@v4
         with:
@@ -122,4 +148,5 @@ jobs:
             /tmp/exhale-output.m4a
             build/exhale-android-arm64/src/lib/libexhale.a
             build/exhale-jni-arm64/libexhale_jni.so
+            app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
