@@ -15,7 +15,12 @@ libxaac_add_definitions()
 include("${XAAC_ROOT}/common/common.cmake")
 include("${XAAC_ROOT}/encoder/libxaacenc.cmake")
 
+# libxaac configures C-oriented flags globally; restore a valid C++ standard for Exhale.
+string(REPLACE "-std=gnu99" "-std=c++11" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
 add_subdirectory("${EXHALE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/exhale-build" EXCLUDE_FROM_ALL)
+# Exhale exports a public PCH; do not propagate that PCH into the small JNI wrapper.
+set_target_properties(exhaleLib PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
 
 add_library(xhe_jni SHARED jni_bridge.c usac_encoder.c)
 target_include_directories(xhe_jni PRIVATE
