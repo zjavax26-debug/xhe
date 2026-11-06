@@ -97,6 +97,22 @@ jobs:
           find build/exhale-android-arm64 -type f \( -name 'libexhale.a' -o -name 'libexhale.so' \) -print -exec file {} \;
           test -n "$(find build/exhale-android-arm64 -type f \( -name 'libexhale.a' -o -name 'libexhale.so' \) -print -quit)"
 
+      - name: Link an Android JNI smoke-test library against Exhale
+        run: |
+          EXHALE_LIB="$GITHUB_WORKSPACE/build/exhale-android-arm64/src/lib/libexhale.a"
+          cmake -S tools/exhale_jni_probe -B build/exhale-jni-arm64 -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DEXHALE_SOURCE_DIR="$GITHUB_WORKSPACE/third_party/exhale" \
+            -DEXHALE_LIBRARY="$EXHALE_LIB" \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/exhale-jni-arm64 --parallel 2
+          find build/exhale-jni-arm64 -type f -name 'libexhale_jni.so' -print -exec file {} ;
+          test -s build/exhale-jni-arm64/libexhale_jni.so
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only build/exhale-jni-arm64/libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe'
+
       - name: Upload Exhale evaluation outputs
         uses: actions/upload-artifact@v4
         with:
@@ -104,4 +120,5 @@ jobs:
           path: |
             /tmp/exhale-output.m4a
             build/exhale-android-arm64/src/lib/libexhale.a
+            build/exhale-jni-arm64/libexhale_jni.so
           if-no-files-found: warn
