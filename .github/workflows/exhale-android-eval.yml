@@ -108,8 +108,9 @@ jobs:
             -DEXHALE_LIBRARY="$EXHALE_LIB" \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build/exhale-jni-arm64 --parallel 2
-          find build/exhale-jni-arm64 -type f -name 'libexhale_jni.so' -print -exec file {} ;
-          test -s build/exhale-jni-arm64/libexhale_jni.so
+          JNI_SO="build/exhale-jni-arm64/libexhale_jni.so"
+          test -s "$JNI_SO"
+          file "$JNI_SO"
           NDK="$ANDROID_HOME/ndk/27.2.12479018"
           "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only build/exhale-jni-arm64/libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe'
 
