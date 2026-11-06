@@ -124,12 +124,12 @@ jobs:
           raw = Path("/tmp/usac-output.usac").read_bytes()
           meta = Path("/tmp/usac-output.txt").read_text()
           def one(name):
-              m = re.search(r"^-" + re.escape(name) + r":(\\d+)$", meta, re.M)
+              m = re.search(r"^-" + re.escape(name) + r":(\d+)$", meta, re.M)
               assert m, "missing metadata field: " + name
               return int(m.group(1))
           init = one("dec_info_init")
           count = one("ia_mp4_stsz_entries")
-          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\\d+)$", meta, re.M)]
+          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\d+)$", meta, re.M)]
           rate = one("media_time_scale")
           duration = one("playTimeInSamples")
           assert init > 0 and count > 0 and len(sizes) == count
