@@ -19,7 +19,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments "-DLIBXAAC_SOURCE_DIR=${projectDir}/../third_party/libxaac"
+                arguments "-DLIBXAAC_SOURCE_DIR=${projectDir}/../third_party/libxaac",
+                        "-DEXHALE_SOURCE_DIR=${projectDir}/../third_party/exhale"
                 cppFlags ''
                 cFlags '-O3'
             }
