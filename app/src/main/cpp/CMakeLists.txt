@@ -11,16 +11,18 @@ endif()
 set(XAAC_ROOT "${LIBXAAC_SOURCE_DIR}")
 include("${XAAC_ROOT}/cmake/utils.cmake")
 libxaac_add_compile_options()
+# libxaac applies -std=gnu99 globally; restrict it to C sources only.
+get_property(XAAC_COMPILE_OPTIONS DIRECTORY PROPERTY COMPILE_OPTIONS)
+list(REMOVE_ITEM XAAC_COMPILE_OPTIONS "-std=gnu99")
+list(APPEND XAAC_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:C>:-std=gnu99>")
+set_property(DIRECTORY PROPERTY COMPILE_OPTIONS "${XAAC_COMPILE_OPTIONS}")
 libxaac_add_definitions()
 include("${XAAC_ROOT}/common/common.cmake")
 include("${XAAC_ROOT}/encoder/libxaacenc.cmake")
 
-# libxaac configures C-oriented flags globally; restore a valid C++ standard for Exhale.
-string(REPLACE "-std=gnu99" "-std=c++11" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-
 add_subdirectory("${EXHALE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/exhale-build" EXCLUDE_FROM_ALL)
-# Exhale exports a public PCH; do not propagate that PCH into the small JNI wrapper.
-set_target_properties(exhaleLib PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+# Exhale declares its PCH PUBLIC; prevent it from propagating to JNI consumers.
+set_property(TARGET exhaleLib PROPERTY INTERFACE_PRECOMPILE_HEADERS "")
 
 add_library(xhe_jni SHARED jni_bridge.c usac_encoder.c)
 target_include_directories(xhe_jni PRIVATE
