@@ -22,9 +22,10 @@ import android.widget.Toast;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    static { System.loadLibrary("xhe_jni"); }
+    static { System.loadLibrary("xhe_jni"); System.loadLibrary("exhale_jni"); }
     private static native String nativeEncoderVersion();
     private static native String nativeEncoderProbe(int sampleRate, int channels, int bitrate);
+    private static native String nativeExhaleProbe();
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
@@ -143,6 +144,27 @@ public class MainActivity extends Activity {
         engineStatus.setTextColor(0xFF555555);
         engineStatus.setPadding(0, dp(8), 0, dp(12));
         root.addView(engineStatus);
+
+        Button exhaleTestButton = new Button(this);
+        exhaleTestButton.setText("PROBAR MOTOR EXHALE");
+        root.addView(exhaleTestButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        exhaleTestButton.setOnClickListener(v -> {
+            exhaleTestButton.setEnabled(false);
+            engineStatus.setText("Ejecutando prueba nativa Exhale…");
+            new Thread(() -> {
+                String result;
+                try { result = nativeExhaleProbe(); }
+                catch (Throwable error) {
+                    result = "Error al ejecutar Exhale: " + error.getClass().getSimpleName()
+                            + ": " + error.getMessage();
+                }
+                final String message = result;
+                runOnUiThread(() -> {
+                    engineStatus.setText(message);
+                    exhaleTestButton.setEnabled(true);
+                });
+            }).start();
+        });
 
         convertButton = new Button(this);
         convertButton.setText("CONVERTIR A M4A");
