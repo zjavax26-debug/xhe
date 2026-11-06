@@ -203,6 +203,52 @@ jobs:
               print(f"ALIGN input={seconds:.2f}s source_frames={frames} decoded_frames={len(decoded)} start_offset_candidate={lag} end_padding_candidate={trailing} signed_correlation={score:.6f} polarity={polarity:+.0f} status=diagnostic")
           PY
 
+      - name: Inspect USAC encoder metadata and decoded PCM frame accounting
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave, subprocess, pathlib, re
+          enc=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacenc"))
+          dec=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacdec"))
+          rate=48000
+          for seconds in (0.25,0.5,1.0,1.5,2.0):
+              stem=f"/tmp/accounting-{str(seconds).replace('.','_')}"
+              wav,usac,meta,out=stem+".wav",stem+".usac",stem+".txt",stem+"-decoded.wav"
+              frames=round(rate*seconds)
+              with wave.open(wav,"wb") as w:
+                  w.setnchannels(2);w.setsampwidth(2);w.setframerate(rate)
+                  pcm=bytearray()
+                  for i in range(frames):
+                      v=int(7000*math.sin(2*math.pi*431*i/rate)+1800*math.sin(2*math.pi*997*i/rate)+900*math.sin(2*math.pi*2137*i/rate))
+                      pcm+=struct.pack("<hh",v,v)
+                  w.writeframes(pcm)
+              subprocess.run([str(enc),f"-ifile:{wav}",f"-ofile:{usac}","-br:64000","-aot:42"],check=True,stdout=subprocess.DEVNULL)
+              subprocess.run([str(dec),f"-ifile:{usac}",f"-imeta:{meta}",f"-ofile:{out}","-mp4:1"],check=True,stdout=subprocess.DEVNULL)
+              txt=pathlib.Path(meta).read_text()
+              def val(k):
+                  m=re.search(r"^-"+re.escape(k)+r":(\d+)$",txt,re.M)
+                  return int(m.group(1)) if m else None
+              sizes=[int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\d+)$",txt,re.M)]
+              with wave.open(out,"rb") as w:
+                  dec_frames=w.getnframes(); dec_rate=w.getframerate(); channels=w.getnchannels()
+              raw_size=pathlib.Path(usac).stat().st_size
+              init=val("dec_info_init")
+              print(f"ACCOUNT input={frames} input_s={seconds:.6f} init_bytes={init} AUs_meta={val('ia_mp4_stsz_entries')} AUs_list={len(sizes)} AU_bytes={sum(sizes)} raw_bytes={raw_size} media_scale={val('media_time_scale')} play_samples={val('playTimeInSamples')} start_offset_meta={val('startOffsetInSamples')} decoded_frames={dec_frames} decoded_rate={dec_rate} channels={channels} decoded_s={dec_frames/dec_rate:.6f} decoded_superframes={dec_frames/2048:.3f}")
+              assert init is not None and len(sizes)==val("ia_mp4_stsz_entries") and init+sum(sizes)==raw_size
+          PY
+
+      - name: Probe M4A with FFmpeg demuxer and decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffprobe -v error -show_entries format=format_name,duration -show_entries stream=codec_name,codec_tag_string,sample_rate,channels,duration,time_base -of default=noprint_wrappers=1 /tmp/isobmff-poc/genuine-usac.m4a | tee /tmp/ffprobe-usac.txt
+          set +e
+          ffmpeg -v warning -i /tmp/isobmff-poc/genuine-usac.m4a -f null - 2>/tmp/ffmpeg-usac-decode.log
+          status=$?
+          set -e
+          echo "FFmpeg decode exit status: $status"
+          cat /tmp/ffmpeg-usac-decode.log
+          if [ "$status" -eq 0 ]; then echo "FFmpeg accepted and decoded the M4A stream"; else echo "FFmpeg could not decode this USAC M4A; inspect diagnostics (not treated as a muxer pass)"; fi
+
       - name: Validate libxaac initialization bytes and access-unit table
         run: |
           python3 - <<'PY'
