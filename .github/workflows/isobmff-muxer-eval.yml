@@ -170,12 +170,12 @@ jobs:
           raw = pathlib.Path("/tmp/usac-output.usac").read_bytes()
           meta = pathlib.Path("/tmp/usac-output.txt").read_text()
           def one(name):
-              m = re.search(r"^-" + re.escape(name) + r":(\\d+)$", meta, re.M)
+              m = re.search(r"^-" + re.escape(name) + r":(\d+)$", meta, re.M)
               assert m, "missing " + name
               return int(m.group(1))
           init = one("dec_info_init")
           count = one("ia_mp4_stsz_entries")
-          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\\d+)$", meta, re.M)]
+          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\d+)$", meta, re.M)]
           asc = raw[:init]
           payload = raw[init:]
           mp4 = pathlib.Path("/tmp/isobmff-poc/genuine-usac.m4a").read_bytes()
