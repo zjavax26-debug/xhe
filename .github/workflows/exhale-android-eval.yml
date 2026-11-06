@@ -77,7 +77,6 @@ jobs:
           print("Exhale produced an MP4/M4A container:", kinds, "bytes=", len(b))
           print("mp4a sample entry and esds descriptor are present.")
           PY
-          cp /tmp/exhale-output.m4a /tmp/exhale-output.m4a
 
       - name: Install pinned Android NDK
         run: |
