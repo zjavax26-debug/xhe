@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/isobmff-muxer-eval.yml"
       - "docs/isobmff-muxer-evaluation.md"
+      - "tools/isobmff_poc/**"
   workflow_dispatch:
 
 permissions:
@@ -83,6 +84,47 @@ jobs:
         run: |
           cmake --build /tmp/isobmff-android-arm64 --target libisomediafile --parallel 2
           find /tmp/isobmff-android-arm64 -type f -name 'liblibisomediafile.a' -print -quit | grep -q .
+
+      - name: Build structural MP4 muxer proof of concept
+        run: |
+          mkdir -p /tmp/isobmff-poc
+          cat > /tmp/isobmff-poc/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          project(isobmff_poc C)
+          add_subdirectory(/tmp/isobmff /tmp/isobmff-poc/upstream)
+          add_executable(mux_one_sample "$GITHUB_WORKSPACE/tools/isobmff_poc/mux_one_sample.c")
+          target_include_directories(mux_one_sample PRIVATE /tmp/isobmff/IsoLib/libisomediafile/src)
+          target_link_libraries(mux_one_sample PRIVATE libisomediafile)
+          EOF
+          cmake -S /tmp/isobmff-poc -B /tmp/isobmff-poc/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/isobmff-poc/build --target mux_one_sample --parallel 2
+
+      - name: Write and inspect structural MP4 fixture
+        run: |
+          printf '\\x12\\x10' > /tmp/test.asc
+          printf '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08' > /tmp/test.au
+          /tmp/isobmff-poc/build/mux_one_sample /tmp/test.asc /tmp/test.au /tmp/isobmff-poc/test.m4a 48000 1024 64000
+          python3 - <<'PY'
+          import pathlib, struct
+          p = pathlib.Path("/tmp/isobmff-poc/test.m4a")
+          data = p.read_bytes()
+          assert len(data) > 32, "MP4 output is unexpectedly small"
+          boxes = []
+          off = 0
+          while off + 8 <= len(data):
+              size = struct.unpack(">I", data[off:off+4])[0]
+              kind = data[off+4:off+8].decode("latin1")
+              if size == 1:
+                  size = struct.unpack(">Q", data[off+8:off+16])[0]
+              elif size == 0:
+                  size = len(data) - off
+              assert size >= 8 and off + size <= len(data), (kind, size, off)
+              boxes.append(kind)
+              off += size
+          assert off == len(data), "Trailing bytes after top-level boxes"
+          assert "ftyp" in boxes and "moov" in boxes and "mdat" in boxes, boxes
+          print("Structural MP4 fixture passed; top-level boxes:", boxes)
+          PY
 
       - name: Verify required muxing API symbols
         shell: bash
