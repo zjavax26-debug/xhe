@@ -85,6 +85,68 @@ jobs:
           cmake --build /tmp/isobmff-android-arm64 --target libisomediafile --parallel 2
           find /tmp/isobmff-android-arm64 -type f -name 'liblibisomediafile.a' -print -quit | grep -q .
 
+      - name: Checkout pinned libxaac encoder
+        uses: actions/checkout@v4
+        with:
+          repository: ittiam-systems/libxaac
+          ref: 2fbadd57bca46693b7a077bcf1513131106d960c
+          path: /tmp/libxaac
+
+      - name: Build libxaac host encoder
+        run: |
+          cmake -S /tmp/libxaac -B /tmp/libxaac-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/libxaac-build --target xaacenc --parallel 2
+
+      - name: Generate PCM and encode genuine USAC AOT 42
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave
+          rate = 48000
+          with wave.open("/tmp/usac-input.wav", "wb") as w:
+              w.setnchannels(2); w.setsampwidth(2); w.setframerate(rate)
+              pcm = bytearray()
+              for i in range(rate):
+                  v = int(9000 * math.sin(2 * math.pi * 440 * i / rate))
+                  pcm += struct.pack("<hh", v, v)
+              w.writeframes(pcm)
+          PY
+          ENCODER="$(find /tmp/libxaac-build -type f -name xaacenc -perm -111 -print -quit)"
+          test -n "$ENCODER"
+          "$ENCODER" -ifile:/tmp/usac-input.wav -ofile:/tmp/usac-output.usac -br:64000 -aot:42
+          test -s /tmp/usac-output.usac
+          test -s /tmp/usac-output.txt
+
+      - name: Validate libxaac initialization bytes and access-unit table
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          raw = Path("/tmp/usac-output.usac").read_bytes()
+          meta = Path("/tmp/usac-output.txt").read_text()
+          def one(name):
+              m = re.search(r"^-" + re.escape(name) + r":(\\d+)$", meta, re.M)
+              assert m, "missing metadata field: " + name
+              return int(m.group(1))
+          init = one("dec_info_init")
+          count = one("ia_mp4_stsz_entries")
+          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\\d+)$", meta, re.M)]
+          rate = one("media_time_scale")
+          duration = one("playTimeInSamples")
+          assert init > 0 and count > 0 and len(sizes) == count
+          assert all(n > 0 for n in sizes)
+          assert init + sum(sizes) == len(raw), (init, sum(sizes), len(raw))
+          assert rate == 48000 and duration == 48000
+          print(f"USAC AOT 42 verified: init={init} bytes, access_units={count}, payload={sum(sizes)} bytes, samples={duration} at {rate} Hz")
+          PY
+
+      - name: Upload genuine USAC stream and encoder metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: genuine-usac-aot42-test
+          path: |
+            /tmp/usac-output.usac
+            /tmp/usac-output.txt
+
       - name: Build structural MP4 muxer proof of concept
         run: |
           mkdir -p /tmp/isobmff-poc
