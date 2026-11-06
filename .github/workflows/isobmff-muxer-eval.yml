@@ -224,6 +224,71 @@ jobs:
           print("NOTE: byte-preservation and box structure are verified; independent USAC decode and exact per-AU timing remain separate gates.")
           PY
 
+      - name: Rebuild USAC elementary stream from M4A sample tables and decode it
+        run: |
+          python3 - <<'PY'
+          import pathlib, struct, re
+          p = pathlib.Path("/tmp/isobmff-poc/genuine-usac.m4a")
+          b = p.read_bytes()
+          def boxes(start, end):
+              out=[]; off=start
+              while off+8 <= end:
+                  n, typ = struct.unpack_from(">I4s", b, off); h=8
+                  if n==1: n=struct.unpack_from(">Q",b,off+8)[0]; h=16
+                  elif n==0: n=end-off
+                  assert n>=h and off+n<=end, (typ,n,off,end)
+                  out.append((typ.decode("latin1"),off,n,h))
+                  off+=n
+              assert off==end,(off,end)
+              return out
+          def child(parent, typ, payload_start=None):
+              _,off,n,h=parent
+              start=off+h if payload_start is None else payload_start
+              return next(x for x in boxes(start,off+n) if x[0]==typ)
+          top=boxes(0,len(b))
+          moov=next(x for x in top if x[0]=="moov")
+          trak=child(moov,"trak")
+          mdia=child(trak,"mdia"); minf=child(mdia,"minf"); stbl=child(minf,"stbl")
+          stbl_children=boxes(stbl[1]+stbl[3],stbl[1]+stbl[2])
+          def get(t): return next(x for x in stbl_children if x[0]==t)
+          stsz=get("stsz"); q=stsz[1]+stsz[3]+4
+          fixed,count=struct.unpack_from(">II",b,q)
+          q+=8
+          if fixed: sizes=[fixed]*count
+          else: sizes=list(struct.unpack_from(">"+("I"*count),b,q))
+          stco=get("stco"); q=stco[1]+stco[3]+4
+          nchunks=struct.unpack_from(">I",b,q)[0]; q+=4
+          offsets=list(struct.unpack_from(">"+("I"*nchunks),b,q))
+          stsc=get("stsc"); q=stsc[1]+stsc[3]+4
+          n=struct.unpack_from(">I",b,q)[0]; q+=4
+          entries=[struct.unpack_from(">III",b,q+12*i) for i in range(n)]
+          assert len(offsets)==1 and entries[0][1]==count, (len(offsets),entries,count)
+          mdat=next(x for x in top if x[0]=="mdat")
+          data=b"".join(b[offsets[0]+sum(sizes[:i]):offsets[0]+sum(sizes[:i+1])] for i in range(count))
+          assert offsets[0]>=mdat[1]+mdat[3] and offsets[0]+sum(sizes)<=mdat[1]+mdat[2]
+          raw=pathlib.Path("/tmp/usac-output.usac").read_bytes()
+          meta=pathlib.Path("/tmp/usac-output.txt").read_text()
+          def one(k):
+              m=re.search(r"^-"+re.escape(k)+r":(\d+)$",meta,re.M); assert m,k
+              return int(m.group(1))
+          init=one("dec_info_init")
+          original_sizes=[int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\d+)$",meta,re.M)]
+          assert sizes==original_sizes, "M4A stsz sample sizes differ from encoder access-unit table"
+          assert data==raw[init:], "M4A chunk/sample mapping did not reproduce encoded USAC payload"
+          rebuilt=pathlib.Path("/tmp/usac-from-m4a.usac")
+          rebuilt.write_bytes(raw[:init]+data)
+          print(f"M4A sample-table extraction passed: {count} samples, {sum(sizes)} payload bytes, exact byte match")
+          PY
+          DECODER="$(find /tmp/libxaac-build -type f -name xaacdec -perm -111 -print -quit)"
+          "$DECODER" -ifile:/tmp/usac-from-m4a.usac -imeta:/tmp/usac-output.txt -ofile:/tmp/usac-from-m4a-decoded.wav -mp4:1
+          python3 - <<'PY'
+          import wave, pathlib
+          with wave.open("/tmp/usac-from-m4a-decoded.wav","rb") as w:
+              ch,rate,frames,width=w.getnchannels(),w.getframerate(),w.getnframes(),w.getsampwidth()
+          assert ch==2 and rate==48000 and frames==49152 and width==2, (ch,rate,frames,width)
+          print(f"Decoded audio reconstructed from M4A sample tables: {ch}ch, {rate}Hz, {frames} frames ({frames/rate:.3f}s)")
+          PY
+
       - name: Verify required muxing API symbols
         shell: bash
         run: |
