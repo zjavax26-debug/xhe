@@ -92,11 +92,11 @@ jobs:
           cmake_minimum_required(VERSION 3.16)
           project(isobmff_poc C)
           add_subdirectory(/tmp/isobmff /tmp/isobmff-poc/upstream)
-          add_executable(mux_one_sample "$GITHUB_WORKSPACE/tools/isobmff_poc/mux_one_sample.c")
+          add_executable(mux_one_sample "${POC_SOURCE}")
           target_include_directories(mux_one_sample PRIVATE /tmp/isobmff/IsoLib/libisomediafile/src)
           target_link_libraries(mux_one_sample PRIVATE libisomediafile)
           EOF
-          cmake -S /tmp/isobmff-poc -B /tmp/isobmff-poc/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S /tmp/isobmff-poc -B /tmp/isobmff-poc/build -DCMAKE_BUILD_TYPE=Release -DPOC_SOURCE="$GITHUB_WORKSPACE/tools/isobmff_poc/mux_one_sample.c"
           cmake --build /tmp/isobmff-poc/build --target mux_one_sample --parallel 2
 
       - name: Write and inspect structural MP4 fixture
