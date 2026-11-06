@@ -7,6 +7,9 @@ on:
     paths:
       - ".github/workflows/exhale-android-eval.yml"
       - "docs/exhale-android-evaluation.md"
+      - "app/src/main/cpp/**"
+      - "app/src/main/java/**"
+      - "app/build.gradle"
 
 permissions:
   contents: read
