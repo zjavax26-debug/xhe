@@ -1,0 +1,106 @@
+name: Exhale Android ARM64 evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [experiment/exhale-android]
+    paths:
+      - ".github/workflows/exhale-android-eval.yml"
+      - "docs/exhale-android-evaluation.md"
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout app repository
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Exhale source
+        uses: actions/checkout@v4
+        with:
+          repository: dtseto/exhale
+          ref: fe9acb3f8739fc970dc6b86592f529bbe2f9036e
+          path: third_party/exhale
+
+      - name: Install build and inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build ffmpeg python3
+
+      - name: Build Exhale host encoder and produce a real M4A
+        run: |
+          cmake -S third_party/exhale -B build/exhale-host -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/exhale-host --parallel 2
+          find build/exhale-host -type f -name exhale -executable -print
+          EXHALE="$(find build/exhale-host -type f -name exhale -executable | head -n 1)"
+          test -n "$EXHALE"
+          python3 - <<'PY'
+          import math, struct, wave
+          rate = 48000
+          with wave.open("/tmp/exhale-input.wav", "wb") as w:
+              w.setnchannels(2); w.setsampwidth(2); w.setframerate(rate)
+              pcm = bytearray()
+              for i in range(rate):
+                  v = int(10000 * math.sin(2 * math.pi * 440 * i / rate))
+                  pcm += struct.pack("<hh", v, v)
+              w.writeframes(pcm)
+          PY
+          "$EXHALE" 5 /tmp/exhale-input.wav /tmp/exhale-output.m4a
+          test -s /tmp/exhale-output.m4a
+          ffprobe -v error -show_entries format=format_name,duration,size -show_entries stream=codec_tag_string,sample_rate,channels,time_base,duration -of default=noprint_wrappers=1 /tmp/exhale-output.m4a || true
+          python3 - <<'PY'
+          import pathlib, struct
+          p = pathlib.Path("/tmp/exhale-output.m4a")
+          b = p.read_bytes()
+          def walk(start, end, depth=0):
+              pos = start
+              while pos + 8 <= end:
+                  size = struct.unpack(">I", b[pos:pos+4])[0]
+                  typ = b[pos+4:pos+8].decode("latin1")
+                  header = 8
+                  if size == 1:
+                      size = struct.unpack(">Q", b[pos+8:pos+16])[0]; header = 16
+                  if size == 0: size = end-pos
+                  assert size >= header and pos+size <= end, (typ,size,pos,end)
+                  yield typ, pos, size, header
+                  pos += size
+          top = list(walk(0, len(b)))
+          kinds = [x[0] for x in top]
+          assert all(x in kinds for x in ("ftyp","moov","mdat")), kinds
+          moov = next(x for x in top if x[0]=="moov")
+          moov_bytes = b[moov[1]:moov[1]+moov[2]]
+          assert b"mp4a" in moov_bytes and b"esds" in moov_bytes
+          assert b"mdat" in b
+          print("Exhale produced an MP4/M4A container:", kinds, "bytes=", len(b))
+          print("mp4a sample entry and esds descriptor are present.")
+          PY
+          cp /tmp/exhale-output.m4a /tmp/exhale-output.m4a
+
+      - name: Install pinned Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+
+      - name: Cross-compile Exhale encoder library for Android ARM64 API 29
+        run: |
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          cmake -S third_party/exhale -B build/exhale-android-arm64 -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/exhale-android-arm64 --target exhaleLib --parallel 2
+          find build/exhale-android-arm64 -type f \( -name 'libexhale.a' -o -name 'libexhale.so' \) -print -exec file {} \;
+          test -n "$(find build/exhale-android-arm64 -type f \( -name 'libexhale.a' -o -name 'libexhale.so' \) -print -quit)"
+
+      - name: Upload Exhale evaluation outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhale-android-arm64-evaluation
+          path: |
+            /tmp/exhale-output.m4a
+            build/exhale-android-arm64/src/lib/libexhale.a
+          if-no-files-found: warn
