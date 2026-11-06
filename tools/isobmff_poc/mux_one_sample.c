@@ -92,11 +92,12 @@ int main(int argc, char **argv) {
     {
         u64 media_duration=0;
         CHECK(MP4GetMediaDuration(media,&media_duration));
-        /* Clip encoder delay/padding to the exact playable sample count in libxaac metadata. */
-        CHECK(MP4InsertMediaIntoTrack(track,0,0,(u64)play,1));
+        /* Preserve the coded media duration. Encoder priming/end trim mapping is not yet
+         * proven for this configuration, so do not apply playTimeInSamples blindly. */
+        CHECK(MP4InsertMediaIntoTrack(track,0,0,media_duration,1));
     }
     CHECK(MP4WriteMovieToFile(movie,argv[3]));
-    printf("Muxed real USAC bytes: ASC=%lu, samples=%lu, payload=%lu, rate=%lu, playable=%lu, frame_duration=%lu\\n",init,count,payload,rate,play,frame_duration);
+    printf("Muxed real USAC bytes: ASC=%lu, samples=%lu, payload=%lu, rate=%lu, encoder_play_samples=%lu (trim mapping pending), frame_duration=%lu\\n",init,count,payload,rate,play,frame_duration);
 done:
     if(sizes_h)MP4DisposeHandle(sizes_h); if(durations_h)MP4DisposeHandle(durations_h);
     if(sample_h)MP4DisposeHandle(sample_h); if(entry_h)MP4DisposeHandle(entry_h);
