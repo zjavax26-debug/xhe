@@ -35,11 +35,14 @@ jobs:
         run: cmake --build /tmp/isobmff-build --target libisomediafile --parallel 2
 
 
-      - name: Install Android NDK
-        uses: android-actions/setup-android@v3
-
       - name: Install pinned Android NDK
-        run: sdkmanager "ndk;27.2.12479018"
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "ndk;27.2.12479018"
+          test -d "$ANDROID_HOME/ndk/27.2.12479018"
 
 
       - name: Enable upstream POSIX shim for Android
