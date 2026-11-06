@@ -341,6 +341,40 @@ jobs:
           cat /tmp/ffmpeg-usac-decode.log
           if [ "$status" -eq 0 ]; then echo "FFmpeg accepted and decoded the M4A stream"; else echo "FFmpeg could not decode this USAC M4A; inspect diagnostics (not treated as a muxer pass)"; fi
 
+      - name: Dump USAC ASC and MPEG-4 descriptor diagnostics
+        run: |
+          python3 - <<'PY'
+          import pathlib, struct, re
+          raw=pathlib.Path("/tmp/usac-output.usac").read_bytes()
+          meta=pathlib.Path("/tmp/usac-output.txt").read_text()
+          m=re.search(r"^-dec_info_init:(\\d+)$",meta,re.M); assert m
+          n=int(m.group(1)); asc=raw[:n]
+          print("USAC init bytes:",asc.hex(" "))
+          print("USAC init length:",len(asc))
+          print("Expected AOT marker bits (first 5 bits):",(asc[0]>>3)&31)
+          p=pathlib.Path("/tmp/isobmff-poc/genuine-usac.m4a")
+          b=p.read_bytes()
+          def boxes(start,end):
+              out=[]; off=start
+              while off+8<=end:
+                  size,typ=struct.unpack_from(">I4s",b,off); h=8
+                  if size==1:size=struct.unpack_from(">Q",b,off+8)[0];h=16
+                  elif size==0:size=end-off
+                  assert size>=h and off+size<=end
+                  out.append((typ.decode("latin1"),off,size,h));off+=size
+              assert off==end
+              return out
+          def walk(parent,depth=0):
+              typ,off,size,h=parent
+              if typ in ("moov","trak","mdia","minf","stbl","edts","udta","mvex"):
+                  for child in boxes(off+h,off+size): walk(child,depth+1)
+              elif typ in ("mp4a","esds"):
+                  print("BOX",typ,"offset",off,"size",size,"hex",b[off:off+size].hex(" "))
+          for x in boxes(0,len(b)): walk(x)
+          PY
+          echo "--- ffprobe stream and format diagnostics ---"
+          ffprobe -v debug -show_streams -show_format /tmp/isobmff-poc/genuine-usac.m4a 2>&1 | tail -n 100
+
       - name: Rebuild USAC elementary stream from M4A sample tables and decode it
         run: |
           python3 - <<'PY'
