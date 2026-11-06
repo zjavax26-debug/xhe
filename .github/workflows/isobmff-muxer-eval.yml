@@ -162,6 +162,45 @@ jobs:
               print(f"TIMING input={frames} ({seconds:.2f}s) AU={coded_units} media_scale={val('media_time_scale')} play_samples={val('playTimeInSamples')} start_offset={val('startOffsetInSamples')} decoded={decoded}/{decoded_rate} ({decoded/decoded_rate:.6f}s) raw_bytes={pathlib.Path(usac).stat().st_size}")
           PY
 
+      - name: Measure decoded USAC signal alignment and end padding
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave, subprocess, pathlib, re
+          import numpy as np
+          enc=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacenc"))
+          dec=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacdec"))
+          rate=48000
+          for seconds in (0.25,0.5,1.0,1.5,2.0):
+              stem=f"/tmp/alignment-{str(seconds).replace('.','_')}"
+              wav,usac,meta,out=stem+".wav",stem+".usac",stem+".txt",stem+"-decoded.wav"
+              frames=round(rate*seconds)
+              src=np.array([int(9000*math.sin(2*math.pi*440*i/rate)) for i in range(frames)],dtype=np.float64)
+              with wave.open(wav,"wb") as w:
+                  w.setnchannels(2);w.setsampwidth(2);w.setframerate(rate)
+                  pcm=np.column_stack((src,src)).astype("<i2").tobytes();w.writeframes(pcm)
+              subprocess.run([str(enc),f"-ifile:{wav}",f"-ofile:{usac}","-br:64000","-aot:42"],check=True,stdout=subprocess.DEVNULL)
+              subprocess.run([str(dec),f"-ifile:{usac}",f"-imeta:{meta}",f"-ofile:{out}","-mp4:1"],check=True,stdout=subprocess.DEVNULL)
+              with wave.open(out,"rb") as w:
+                  decoded=np.frombuffer(w.readframes(w.getnframes()),dtype="<i2").reshape(-1,w.getnchannels())[:,0].astype(np.float64)
+                  out_rate=w.getframerate()
+              assert out_rate==rate
+              # Search a bounded start offset; normalized correlation handles lossy gain changes.
+              max_lag=min(8192,max(0,len(decoded)-len(src)))
+              best=(-1.0,0)
+              for lag in range(max_lag+1):
+                  n=min(len(src),len(decoded)-lag)
+                  if n<1024: continue
+                  a=src[:n];b=decoded[lag:lag+n]
+                  den=np.linalg.norm(a)*np.linalg.norm(b)
+                  score=float(np.dot(a,b)/den) if den else 0.0
+                  if score>best[0]:best=(score,lag)
+              score,lag=best
+              aligned=min(len(src),len(decoded)-lag)
+              trailing=len(decoded)-lag-aligned
+              print(f"ALIGN input={seconds:.2f}s source_frames={frames} decoded_frames={len(decoded)} start_offset_frames={lag} end_padding_frames={trailing} correlation={score:.6f}")
+              assert score>0.90, f"could not align decoded source signal: {score}"
+          PY
+
       - name: Validate libxaac initialization bytes and access-unit table
         run: |
           python3 - <<'PY'
