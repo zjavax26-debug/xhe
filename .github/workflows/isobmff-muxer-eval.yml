@@ -347,7 +347,7 @@ jobs:
           import pathlib, struct, re
           raw=pathlib.Path("/tmp/usac-output.usac").read_bytes()
           meta=pathlib.Path("/tmp/usac-output.txt").read_text()
-          m=re.search(r"^-dec_info_init:(\\d+)$",meta,re.M); assert m
+          m=re.search(r"^-dec_info_init:(\d+)$",meta,re.M); assert m
           n=int(m.group(1)); asc=raw[:n]
           print("USAC init bytes:",asc.hex(" "))
           print("USAC init length:",len(asc))
