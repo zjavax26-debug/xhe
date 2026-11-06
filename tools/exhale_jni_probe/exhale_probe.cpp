@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <cstdio>
 #include "exhaleDecl.h"
 
 extern "C" JNIEXPORT jstring JNICALL
