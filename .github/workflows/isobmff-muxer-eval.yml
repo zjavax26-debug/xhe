@@ -162,31 +162,50 @@ jobs:
           cmake -S /tmp/isobmff-poc -B /tmp/isobmff-poc/build -DCMAKE_BUILD_TYPE=Release -DPOC_SOURCE="$GITHUB_WORKSPACE/tools/isobmff_poc/mux_one_sample.c"
           cmake --build /tmp/isobmff-poc/build --target mux_one_sample --parallel 2
 
-      - name: Write and inspect structural MP4 fixture
+      - name: Mux genuine USAC stream and inspect MP4 sample payload
         run: |
-          printf '\\x12\\x10' > /tmp/test.asc
-          printf '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08' > /tmp/test.au
-          /tmp/isobmff-poc/build/mux_one_sample /tmp/test.asc /tmp/test.au /tmp/isobmff-poc/test.m4a 48000 1024 64000
+          /tmp/isobmff-poc/build/mux_one_sample /tmp/usac-output.usac /tmp/usac-output.txt /tmp/isobmff-poc/genuine-usac.m4a 64000 1024 reserved
           python3 - <<'PY'
-          import pathlib, struct
-          p = pathlib.Path("/tmp/isobmff-poc/test.m4a")
-          data = p.read_bytes()
-          assert len(data) > 32, "MP4 output is unexpectedly small"
+          import pathlib, struct, re
+          raw = pathlib.Path("/tmp/usac-output.usac").read_bytes()
+          meta = pathlib.Path("/tmp/usac-output.txt").read_text()
+          def one(name):
+              m = re.search(r"^-" + re.escape(name) + r":(\\d+)$", meta, re.M)
+              assert m, "missing " + name
+              return int(m.group(1))
+          init = one("dec_info_init")
+          count = one("ia_mp4_stsz_entries")
+          sizes = [int(x) for x in re.findall(r"^-ia_mp4_stsz_size:(\\d+)$", meta, re.M)]
+          asc = raw[:init]
+          payload = raw[init:]
+          mp4 = pathlib.Path("/tmp/isobmff-poc/genuine-usac.m4a").read_bytes()
           boxes = []
           off = 0
-          while off + 8 <= len(data):
-              size = struct.unpack(">I", data[off:off+4])[0]
-              kind = data[off+4:off+8].decode("latin1")
+          while off + 8 <= len(mp4):
+              size = struct.unpack(">I", mp4[off:off+4])[0]
+              kind = mp4[off+4:off+8].decode("latin1")
+              header = 8
               if size == 1:
-                  size = struct.unpack(">Q", data[off+8:off+16])[0]
+                  size = struct.unpack(">Q", mp4[off+8:off+16])[0]; header = 16
               elif size == 0:
-                  size = len(data) - off
-              assert size >= 8 and off + size <= len(data), (kind, size, off)
-              boxes.append(kind)
+                  size = len(mp4) - off
+              assert size >= header and off + size <= len(mp4), (kind, size, off)
+              boxes.append((kind, off, size, header))
               off += size
-          assert off == len(data), "Trailing bytes after top-level boxes"
-          assert "ftyp" in boxes and "moov" in boxes and "mdat" in boxes, boxes
-          print("Structural MP4 fixture passed; top-level boxes:", boxes)
+          assert off == len(mp4), "trailing MP4 bytes"
+          kinds = [x[0] for x in boxes]
+          assert all(k in kinds for k in ("ftyp", "moov", "mdat")), kinds
+          mdat = next(x for x in boxes if x[0] == "mdat")
+          media_payload = mp4[mdat[1]+mdat[3]:mdat[1]+mdat[2]]
+          assert media_payload == payload, "MP4 mdat does not preserve all real USAC access-unit bytes in order"
+          moov = next(x for x in boxes if x[0] == "moov")
+          moov_data = mp4[moov[1]:moov[1]+moov[2]]
+          assert b"mp4a" in moov_data, "missing mp4a audio sample entry"
+          assert b"esds" in moov_data, "missing MPEG-4 ES descriptor"
+          assert asc in moov_data, "encoder AudioSpecificConfig not found in sample description"
+          assert len(sizes) == count and sum(sizes) == len(payload)
+          print(f"Real USAC M4A structure passed: boxes={kinds}, access_units={count}, mdat_payload={len(media_payload)} bytes, ASC={len(asc)} bytes")
+          print("NOTE: byte-preservation and box structure are verified; independent USAC decode and exact per-AU timing remain separate gates.")
           PY
 
       - name: Verify required muxing API symbols
