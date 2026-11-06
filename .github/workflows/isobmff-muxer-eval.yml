@@ -90,11 +90,11 @@ jobs:
         with:
           repository: ittiam-systems/libxaac
           ref: 2fbadd57bca46693b7a077bcf1513131106d960c
-          path: /tmp/libxaac
+          path: third_party/libxaac
 
       - name: Build libxaac host encoder
         run: |
-          cmake -S /tmp/libxaac -B /tmp/libxaac-build -DCMAKE_BUILD_TYPE=Release
+          cmake -S third_party/libxaac -B /tmp/libxaac-build -DCMAKE_BUILD_TYPE=Release
           cmake --build /tmp/libxaac-build --target xaacenc --parallel 2
 
       - name: Generate PCM and encode genuine USAC AOT 42
