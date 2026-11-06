@@ -368,6 +368,54 @@ jobs:
           print("Reference target for the 1-second input is 24000 ticks at the encoder's 24000-Hz media timescale. These candidates are diagnostic only; no duration is selected automatically.")
           PY
 
+      - name: Evaluate rational per-access-unit timing across five durations
+        run: |
+          python3 - <<'PY'
+          import math, struct, wave, subprocess, pathlib, re
+          enc=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacenc"))
+          dec=next(pathlib.Path("/tmp/libxaac-build").rglob("xaacdec"))
+          mux="/tmp/isobmff-poc/build/mux_one_sample"
+          def boxes(data,start,end):
+              out=[]; off=start
+              while off+8<=end:
+                  n,t=struct.unpack_from(">I4s",data,off);h=8
+                  if n==1:n=struct.unpack_from(">Q",data,off+8)[0];h=16
+                  elif n==0:n=end-off
+                  assert n>=h and off+n<=end
+                  out.append((t.decode("latin1"),off,n,h));off+=n
+              assert off==end
+              return out
+          for seconds in (0.25,0.5,1.0,1.5,2.0):
+              stem=f"/tmp/rational-{str(seconds).replace('.','_')}"
+              wav,usac,meta,out=stem+".wav",stem+".usac",stem+".txt",stem+".m4a"
+              rate=48000;frames=round(rate*seconds)
+              with wave.open(wav,"wb") as w:
+                  w.setnchannels(2);w.setsampwidth(2);w.setframerate(rate)
+                  pcm=bytearray()
+                  for i in range(frames):
+                      v=int(9000*math.sin(2*math.pi*440*i/rate));pcm+=struct.pack("<hh",v,v)
+                  w.writeframes(pcm)
+              subprocess.run([str(enc),f"-ifile:{wav}",f"-ofile:{usac}","-br:64000","-aot:42"],check=True,stdout=subprocess.DEVNULL)
+              m=pathlib.Path(meta)
+              subprocess.run([str(dec),f"-ifile:{usac}",f"-imeta:{meta}",f"-ofile:{stem}-decoded.wav","-mp4:1"],check=True,stdout=subprocess.DEVNULL)
+              txt=m.read_text()
+              def val(k):
+                  x=re.search(r"^-"+re.escape(k)+r":(\d+)$",txt,re.M);assert x,k
+                  return int(x.group(1))
+              count=val("ia_mp4_stsz_entries");media_scale=val("media_time_scale")
+              play=val("playTimeInSamples")
+              assert media_scale==24000
+              target=round(frames*media_scale/rate)
+              assert target>0
+              # Distribute exact presentation ticks with a deterministic rational accumulator.
+              durations=[((i+1)*target)//count-(i*target)//count for i in range(count)]
+              assert sum(durations)==target
+              # The encoder's access-unit decode cadence remains separately measured.
+              with wave.open(stem+"-decoded.wav","rb") as w:
+                  decoded,decoded_rate=w.getnframes(),w.getframerate()
+              print(f"RATIONAL input={seconds:.2f}s AUs={count} target_ticks={target} media_scale={media_scale} uniform={target/count:.6f} duration_minmax={min(durations)}..{max(durations)} decoded={decoded}/{decoded_rate} ({decoded/decoded_rate:.6f}s) play_samples={play}")
+          PY
+
       - name: Verify required muxing API symbols
         shell: bash
         run: |
