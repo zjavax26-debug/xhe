@@ -319,6 +319,55 @@ jobs:
           print(f"Decoded audio reconstructed from M4A sample tables: {ch}ch, {rate}Hz, {frames} frames ({frames/rate:.3f}s)")
           PY
 
+      - name: Compare MP4 sample durations and edit-list timing candidates
+        run: |
+          python3 - <<'PY'
+          import pathlib, struct, subprocess, re
+          exe="/tmp/isobmff-poc/build/mux_one_sample"
+          stream="/tmp/usac-output.usac"; meta="/tmp/usac-output.txt"
+          candidates=(1024, 1088, 1090, 1091, 1117, 1120, 2048)
+          def boxes(data,start,end):
+              out=[]; off=start
+              while off+8<=end:
+                  n,t=struct.unpack_from(">I4s",data,off); h=8
+                  if n==1:n=struct.unpack_from(">Q",data,off+8)[0];h=16
+                  elif n==0:n=end-off
+                  assert n>=h and off+n<=end,(t,n,off,end)
+                  out.append((t.decode("latin1"),off,n,h));off+=n
+              assert off==end
+              return out
+          for duration in candidates:
+              out=f"/tmp/candidate-{duration}.m4a"
+              subprocess.run([exe,stream,meta,out,"64000",str(duration),"reserved"],check=True,stdout=subprocess.DEVNULL)
+              data=pathlib.Path(out).read_bytes()
+              top=boxes(data,0,len(data))
+              moov=next(x for x in top if x[0]=="moov")
+              trak=next(x for x in boxes(data,moov[1]+moov[3],moov[1]+moov[2]) if x[0]=="trak")
+              mdia=next(x for x in boxes(data,trak[1]+trak[3],trak[1]+trak[2]) if x[0]=="mdia")
+              minf=next(x for x in boxes(data,mdia[1]+mdia[3],mdia[1]+mdia[2]) if x[0]=="minf")
+              stbl=next(x for x in boxes(data,minf[1]+minf[3],minf[1]+minf[2]) if x[0]=="stbl")
+              children=boxes(data,stbl[1]+stbl[3],stbl[1]+stbl[2])
+              stts=next(x for x in children if x[0]=="stts")
+              q=stts[1]+stts[3]+4; n=struct.unpack_from(">I",data,q)[0];q+=4
+              entries=[struct.unpack_from(">II",data,q+8*i) for i in range(n)]
+              media_ticks=sum(count*delta for count,delta in entries)
+              edts=next((x for x in boxes(data,trak[1]+trak[3],trak[1]+trak[2]) if x[0]=="edts"),None)
+              edit="none"
+              if edts:
+                  elst=next(x for x in boxes(data,edts[1]+edts[3],edts[1]+edts[2]) if x[0]=="elst")
+                  q=elst[1]+elst[3]; version=data[q]; q+=4
+                  count=struct.unpack_from(">I",data,q)[0];q+=4
+                  vals=[]
+                  for _ in range(count):
+                      if version==1: seg,media=struct.unpack_from(">Qq",data,q);q+=16
+                      else: seg,media=struct.unpack_from(">Ii",data,q);q+=8
+                      rate_i,rate_f=struct.unpack_from(">hh",data,q);q+=4
+                      vals.append((seg,media,rate_i,rate_f))
+                  edit=str(vals)
+              print(f"CANDIDATE sample_delta={duration} stts_entries={entries} media_ticks={media_ticks} media_seconds={media_ticks/24000:.6f} edit_list={edit}")
+          print("Reference target for the 1-second input is 24000 ticks at the encoder's 24000-Hz media timescale. These candidates are diagnostic only; no duration is selected automatically.")
+          PY
+
       - name: Verify required muxing API symbols
         shell: bash
         run: |
