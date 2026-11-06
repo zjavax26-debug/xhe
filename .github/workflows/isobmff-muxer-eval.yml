@@ -1,0 +1,47 @@
+name: Evaluate ISOBMFF muxer
+on:
+  push:
+    branches:
+      - experiment/isobmff-muxer
+    paths:
+      - ".github/workflows/isobmff-muxer-eval.yml"
+      - "docs/isobmff-muxer-evaluation.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-isobmff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout app repository
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned MPEGGroup reference library
+        run: |
+          git clone --filter=blob:none https://github.com/MPEGGroup/isobmff.git /tmp/isobmff
+          git -C /tmp/isobmff checkout 689ac096a8e485385089341785c10271cf0684a8
+
+      - name: Configure library-only build
+        run: |
+          cmake -S /tmp/isobmff -B /tmp/isobmff-build \
+            -DISOBMFF_BUILD_LIB_ONLY=ON \
+            -DGIT_SUBMODULE=OFF \
+            -DLIBISOMEDIAFILE_STRICT_WARNINGS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build libisomediafile
+        run: cmake --build /tmp/isobmff-build --target libisomediafile --parallel 2
+
+      - name: Verify required muxing API symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIB="$(find /tmp/isobmff-build -type f \\( -name 'liblibisomediafile.a' -o -name 'liblibisomediafile.so' \\) -print -quit)"
+          test -n "$LIB"
+          nm -g "$LIB" | grep -q ' MP4NewMovie$'
+          nm -g "$LIB" | grep -q ' MP4NewSampleDescription$'
+          nm -g "$LIB" | grep -q ' MP4AddMediaSamples$'
+          nm -g "$LIB" | grep -q ' MP4WriteMovieToFile$'
+          echo "libisomediafile built and required muxing APIs are present: $LIB"
