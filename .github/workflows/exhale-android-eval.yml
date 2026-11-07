@@ -148,6 +148,7 @@ jobs:
           unzip -p "$APK" lib/arm64-v8a/libexhale_jni.so > /tmp/app-libexhale_jni.so
           NDK="$ANDROID_HOME/ndk/27.2.12479018"
           "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only /tmp/app-libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe'
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D --defined-only /tmp/app-libexhale_jni.so | grep 'Java_com_xhe_audioconverter_MainActivity_nativeExhaleMp4Probe'
       - name: Upload Exhale evaluation outputs
         uses: actions/upload-artifact@v4
         with:
