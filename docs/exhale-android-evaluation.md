@@ -68,3 +68,13 @@ Next validation gates:
 3. Integrate decoded source audio with PCM16-to-24-bit-left-aligned conversion and supported-rate handling.
 4. Validate output duration, file size/bitrate behavior, and playback on the target device before enabling production conversion.
 
+## On-device Android container/track recognition (TECNO / Android 12)
+
+The user installed workflow run 42377941938 and reran **PROBAR ESCRITURA M4A**. The app reported:
+
+- Exhale writer: 890-byte file, 3 USAC access units, expected MP4 boxes and `mp4a/esds` descriptors.
+- Android `MediaExtractor` opened the file and found an audio track with MIME `audio/mp4a-latm`, 48,000 Hz, 2 channels.
+- Android's regular codec list reported at least one decoder advertising that MIME type.
+
+This validates container parsing and track discovery on the target device. It does **not** yet prove the decoder can configure for USAC AOT 42 or successfully output PCM. The next device test must actually configure `MediaCodec`, feed the extracted sample data, and confirm decoded PCM output.
+
