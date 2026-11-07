@@ -50,3 +50,21 @@ The Android conversion path must follow the upstream Exhale application sequence
 
 The current Android app deliberately keeps **CONVERTIR A M4A** disabled until these requirements are met. The native probe remains a diagnostic only.
 
+## On-device MP4 writer smoke test (TECNO / Android 12)
+
+The user installed the APK from workflow run 42377172289 and successfully ran **PROBAR ESCRITURA M4A**. The app reported:
+
+- `M4A writer OK`
+- Output file size: 890 bytes
+- 3 encoded USAC access units written
+- Top-level `ftyp`, `moov`, and `mdat` boxes found
+- `mp4a` sample entry and `esds` descriptor found
+
+The file was written to the app-private cache path `exhale-writer-test.m4a`. This is direct device validation of the JNI + Exhale encoder + BasicMP4Writer path for a short silent fixture. It does not yet prove that the sample decodes or plays, nor validate real source audio, bitrate control, long-file frame scheduling, resampling, or gapless duration.
+
+Next validation gates:
+1. Verify the sample through Android MediaExtractor/MediaCodec on-device (AOT 42 support may vary by device).
+2. Port the upstream Exhale frame scheduling, lookahead, priming, post-roll and writer finalization for arbitrary PCM duration.
+3. Integrate decoded source audio with PCM16-to-24-bit-left-aligned conversion and supported-rate handling.
+4. Validate output duration, file size/bitrate behavior, and playback on the target device before enabling production conversion.
+
