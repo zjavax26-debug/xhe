@@ -243,14 +243,90 @@ public class MainActivity extends Activity {
                     }
                 }
             }
-            return details + (decoderFound
-                    ? "\\nAndroid informa un decodificador compatible (falta probar decodificación)."
-                    : "\\nEste Android no anuncia un decodificador para " + mime + ".");
+            if (!decoderFound) {
+                return details + "\\nAndroid no anuncia un decodificador para " + mime + ".";
+            }
+            return details + "\\n" + decodeM4aTrack(extractor, audioTrack, format, mime);
         } catch (Exception error) {
-            return "Android MediaExtractor no pudo abrir el M4A: "
+            return "Android MediaExtractor/MediaCodec: "
                     + error.getClass().getSimpleName() + ": " + error.getMessage();
         } finally {
             extractor.release();
+        }
+    }
+
+    // Actually configure the platform decoder and drain PCM output. This is
+    // stronger than MIME capability discovery; it validates this sample only.
+    private String decodeM4aTrack(android.media.MediaExtractor extractor,
+                                  int trackIndex, android.media.MediaFormat format,
+                                  String mime) {
+        android.media.MediaCodec decoder = null;
+        boolean started = false;
+        long decodedBytes = 0;
+        boolean inputDone = false;
+        boolean outputDone = false;
+        try {
+            extractor.selectTrack(trackIndex);
+            decoder = android.media.MediaCodec.createDecoderByType(mime);
+            decoder.configure(format, null, null, 0);
+            decoder.start();
+            started = true;
+            android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
+            int iterations = 0;
+            while (!outputDone && iterations++ < 10000) {
+                if (!inputDone) {
+                    int inputIndex = decoder.dequeueInputBuffer(10000);
+                    if (inputIndex >= 0) {
+                        java.nio.ByteBuffer input = decoder.getInputBuffer(inputIndex);
+                        if (input == null) throw new java.io.IOException("buffer de entrada nulo");
+                        input.clear();
+                        int size = extractor.readSampleData(input, 0);
+                        if (size < 0) {
+                            decoder.queueInputBuffer(inputIndex, 0, 0, 0,
+                                    android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                            inputDone = true;
+                        } else {
+                            long pts = extractor.getSampleTime();
+                            decoder.queueInputBuffer(inputIndex, 0, size,
+                                    Math.max(0, pts), 0);
+                            extractor.advance();
+                        }
+                    }
+                }
+                int outputIndex = decoder.dequeueOutputBuffer(info, 10000);
+                if (outputIndex >= 0) {
+                    if (info.size > 0) decodedBytes += info.size;
+                    boolean eos = (info.flags
+                            & android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+                    decoder.releaseOutputBuffer(outputIndex, false);
+                    if (eos) outputDone = true;
+                } else if (outputIndex == android.media.MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    // The decoded PCM format is available from decoder.getOutputFormat().
+                }
+            }
+            if (!outputDone) return "MediaCodec no terminó la decodificación (límite de seguridad).";
+            if (decodedBytes <= 0) {
+                return "MediaCodec llegó al final, pero no produjo PCM.";
+            }
+            android.media.MediaFormat decoded = decoder.getOutputFormat();
+            String pcm = "MediaCodec decodificó " + decodedBytes + " bytes PCM";
+            if (decoded.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) {
+                pcm += ", " + decoded.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE) + " Hz";
+            }
+            if (decoded.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) {
+                pcm += ", " + decoded.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT) + " canales";
+            }
+            return pcm + ".";
+        } catch (Exception error) {
+            return "MediaCodec no pudo decodificar esta trama USAC: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage();
+        } finally {
+            if (decoder != null) {
+                if (started) {
+                    try { decoder.stop(); } catch (RuntimeException ignored) { }
+                }
+                decoder.release();
+            }
         }
     }
 
