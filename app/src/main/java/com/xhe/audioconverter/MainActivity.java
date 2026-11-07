@@ -76,6 +76,38 @@ public class MainActivity extends Activity {
         selectedFile.setTextColor(0xFF555555);
         root.addView(selectedFile, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
+        Button decodeTestButton = new Button(this);
+        decodeTestButton.setText("PROBAR DECODIFICACIÓN DEL AUDIO");
+        decodeTestButton.setEnabled(false);
+        root.addView(decodeTestButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        decodeTestButton.setOnClickListener(v -> {
+            if (selectedAudio == null) return;
+            decodeTestButton.setEnabled(false);
+            engineStatus.setText("Decodificando el archivo seleccionado a PCM…");
+            new Thread(() -> {
+                String result;
+                java.io.File wav = new java.io.File(getCacheDir(), "selected-audio-pcm-test.wav");
+                try {
+                    AudioPcmDecoder.Result decoded = AudioPcmDecoder.decode(
+                            MainActivity.this, selectedAudio, wav);
+                    double seconds = decoded.pcmBytes
+                            / (double) (decoded.sampleRate * decoded.channels * 2);
+                    result = String.format(Locale.US,
+                            "PCM de entrada OK: %d Hz, %d canales, %.3f s, %d bytes\\nWAV temporal: %s",
+                            decoded.sampleRate, decoded.channels, seconds,
+                            decoded.pcmBytes, decoded.wavFile.getAbsolutePath());
+                } catch (Exception error) {
+                    result = "No se pudo decodificar el audio: "
+                            + error.getClass().getSimpleName() + ": " + error.getMessage();
+                }
+                final String message = result;
+                runOnUiThread(() -> {
+                    engineStatus.setText(message);
+                    decodeTestButton.setEnabled(selectedAudio != null);
+                });
+            }).start();
+        });
+
         root.addView(section("BITRATE"));
 
         bitrateValue = text("64 kbps", 28, true);
@@ -356,6 +388,13 @@ public class MainActivity extends Activity {
                 getContentResolver().takePersistableUriPermission(
                         selectedAudio, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 selectedFile.setText(selectedAudio.getLastPathSegment());
+                for (int i = 0; i < ((LinearLayout) selectedFile.getParent()).getChildCount(); i++) {
+                    View child = ((LinearLayout) selectedFile.getParent()).getChildAt(i);
+                    if (child instanceof Button
+                            && "PROBAR DECODIFICACIÓN DEL AUDIO".contentEquals(((Button) child).getText())) {
+                        child.setEnabled(true);
+                    }
+                }
                 Toast.makeText(this, "Audio seleccionado", Toast.LENGTH_SHORT).show();
             }
         }
