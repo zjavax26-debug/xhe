@@ -26,6 +26,7 @@ public class MainActivity extends Activity {
     private static native String nativeEncoderVersion();
     private static native String nativeEncoderProbe(int sampleRate, int channels, int bitrate);
     private static native String nativeExhaleProbe();
+    private static native String nativeExhaleMp4Probe(String outputPath);
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
@@ -162,6 +163,32 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     engineStatus.setText(message);
                     exhaleTestButton.setEnabled(true);
+                });
+            }).start();
+        });
+
+        Button mp4TestButton = new Button(this);
+        mp4TestButton.setText("PROBAR ESCRITURA M4A");
+        root.addView(mp4TestButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        mp4TestButton.setOnClickListener(v -> {
+            mp4TestButton.setEnabled(false);
+            engineStatus.setText("Creando M4A de prueba con el escritor oficial de Exhale…");
+            new Thread(() -> {
+                String result;
+                java.io.File testFile = new java.io.File(getCacheDir(), "exhale-writer-test.m4a");
+                try {
+                    result = nativeExhaleMp4Probe(testFile.getAbsolutePath());
+                    if (result.startsWith("M4A writer OK")) {
+                        result += "\\nArchivo de prueba: " + testFile.getAbsolutePath();
+                    }
+                } catch (Throwable error) {
+                    result = "Error al probar el escritor M4A: "
+                            + error.getClass().getSimpleName() + ": " + error.getMessage();
+                }
+                final String message = result;
+                runOnUiThread(() -> {
+                    engineStatus.setText(message);
+                    mp4TestButton.setEnabled(true);
                 });
             }).start();
         });
