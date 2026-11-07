@@ -21,6 +21,10 @@ include("${XAAC_ROOT}/common/common.cmake")
 include("${XAAC_ROOT}/encoder/libxaacenc.cmake")
 
 add_subdirectory("${EXHALE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/exhale-build" EXCLUDE_FROM_ALL)
+# Android needs only the encoder library; never build Exhale's desktop WAV/MP4 CLI.
+if(TARGET exhaleApp)
+    set_target_properties(exhaleApp PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
 # Exhale declares its PCH PUBLIC; prevent it from propagating to JNI consumers.
 set_property(TARGET exhaleLib PROPERTY INTERFACE_PRECOMPILE_HEADERS "")
 
