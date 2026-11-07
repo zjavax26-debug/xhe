@@ -30,6 +30,20 @@ unset(XHE_PROJECT_SOURCE_DIR)
 # Exhale declares its PCH PUBLIC; prevent it from propagating to JNI consumers.
 set_property(TARGET exhaleLib PROPERTY INTERFACE_PRECOMPILE_HEADERS "")
 
+# Reuse Exhale's own ISO-BMFF writer instead of creating a second, divergent
+# MP4 implementation. This target is compiled now; conversion remains gated
+# until the full upstream priming/finalization sequence is ported and tested.
+add_library(exhaleMp4Writer STATIC
+    "${EXHALE_SOURCE_DIR}/src/app/basicMP4Writer.cpp"
+)
+target_include_directories(exhaleMp4Writer PUBLIC
+    "${EXHALE_SOURCE_DIR}/src/app"
+    "${EXHALE_SOURCE_DIR}/include"
+    "${EXHALE_SOURCE_DIR}/src/lib"
+)
+target_compile_features(exhaleMp4Writer PUBLIC cxx_std_11)
+target_link_libraries(exhaleMp4Writer PUBLIC exhaleLib)
+
 add_library(xhe_jni SHARED jni_bridge.c usac_encoder.c)
 target_include_directories(xhe_jni PRIVATE
     "${XAAC_ROOT}/encoder"
@@ -42,4 +56,4 @@ target_link_libraries(xhe_jni PRIVATE libxaacenc ${android_log} m)
 add_library(exhale_jni SHARED exhale_jni.cpp)
 target_include_directories(exhale_jni PRIVATE "${EXHALE_SOURCE_DIR}/include")
 find_package(Threads REQUIRED)
-target_link_libraries(exhale_jni PRIVATE exhaleLib Threads::Threads ${android_log})
+target_link_libraries(exhale_jni PRIVATE exhaleMp4Writer exhaleLib Threads::Threads ${android_log})
