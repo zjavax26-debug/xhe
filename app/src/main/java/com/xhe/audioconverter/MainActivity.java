@@ -179,6 +179,7 @@ public class MainActivity extends Activity {
                 try {
                     result = nativeExhaleMp4Probe(testFile.getAbsolutePath());
                     if (result.startsWith("M4A writer OK")) {
+                        result += "\\n" + inspectM4aWithAndroid(testFile);
                         result += "\\nArchivo de prueba: " + testFile.getAbsolutePath();
                     }
                 } catch (Throwable error) {
@@ -202,6 +203,55 @@ public class MainActivity extends Activity {
         scrollView.setFillViewport(true);
         scrollView.addView(root);
         setContentView(scrollView);
+    }
+
+    // Ask Android's own ISO-BMFF parser and codec registry to inspect the
+    // generated sample. A supported decoder is not assumed merely from MP4 boxes.
+    private String inspectM4aWithAndroid(java.io.File file) {
+        android.media.MediaExtractor extractor = new android.media.MediaExtractor();
+        try {
+            extractor.setDataSource(file.getAbsolutePath());
+            int audioTrack = -1;
+            android.media.MediaFormat format = null;
+            for (int i = 0; i < extractor.getTrackCount(); i++) {
+                android.media.MediaFormat candidate = extractor.getTrackFormat(i);
+                String mime = candidate.getString(android.media.MediaFormat.KEY_MIME);
+                if (mime != null && mime.startsWith("audio/")) {
+                    audioTrack = i;
+                    format = candidate;
+                    break;
+                }
+            }
+            if (audioTrack < 0 || format == null) {
+                return "Android MediaExtractor: no encontró pista de audio";
+            }
+            String mime = format.getString(android.media.MediaFormat.KEY_MIME);
+            String details = "Android MediaExtractor: pista " + mime;
+            if (format.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) {
+                details += ", " + format.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE) + " Hz";
+            }
+            if (format.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) {
+                details += ", " + format.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT) + " canales";
+            }
+            boolean decoderFound = false;
+            for (android.media.MediaCodecInfo info :
+                    new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS)
+                            .getCodecInfos()) {
+                if (!info.isEncoder()) {
+                    for (String type : info.getSupportedTypes()) {
+                        if (mime.equalsIgnoreCase(type)) decoderFound = true;
+                    }
+                }
+            }
+            return details + (decoderFound
+                    ? "\\nAndroid informa un decodificador compatible (falta probar decodificación)."
+                    : "\\nEste Android no anuncia un decodificador para " + mime + ".");
+        } catch (Exception error) {
+            return "Android MediaExtractor no pudo abrir el M4A: "
+                    + error.getClass().getSimpleName() + ": " + error.getMessage();
+        } finally {
+            extractor.release();
+        }
     }
 
     private void setBitrate(int value, boolean updateInput) {
