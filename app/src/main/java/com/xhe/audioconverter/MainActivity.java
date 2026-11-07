@@ -27,6 +27,7 @@ public class MainActivity extends Activity {
     private static native String nativeEncoderProbe(int sampleRate, int channels, int bitrate);
     private static native String nativeExhaleProbe();
     private static native String nativeExhaleMp4Probe(String outputPath);
+    private static native String nativeExhaleEncodeWav(String inputPath, String outputPath);
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
@@ -226,6 +227,29 @@ public class MainActivity extends Activity {
             }).start();
         });
 
+        Button sourceEncodeTestButton = new Button(this);
+        sourceEncodeTestButton.setText("PROBAR CODIFICACIÓN DE AUDIO REAL");
+        sourceEncodeTestButton.setEnabled(false);
+        root.addView(sourceEncodeTestButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        sourceEncodeTestButton.setOnClickListener(v -> {
+            if (selectedAudio == null) return;
+            sourceEncodeTestButton.setEnabled(false);
+            engineStatus.setText("Decodificando y codificando el audio completo con Exhale...");
+            new Thread(() -> {
+                String result;
+                java.io.File wav = new java.io.File(getCacheDir(), "selected-audio-exhale-input.wav");
+                java.io.File m4a = new java.io.File(getCacheDir(), "selected-audio-exhale-experimental.m4a");
+                try {
+                    AudioPcmDecoder.Result decoded = AudioPcmDecoder.decode(MainActivity.this, selectedAudio, wav);
+                    if (decoded.sampleRate != 44100 && decoded.sampleRate != 48000) throw new java.io.IOException("Esta prueba admite 44.1 o 48 kHz; el archivo tiene " + decoded.sampleRate + " Hz.");
+                    result = nativeExhaleEncodeWav(wav.getAbsolutePath(), m4a.getAbsolutePath());
+                    if (result.startsWith("M4A experimental generado")) { result += "\\n" + inspectM4aWithAndroid(m4a); result += "\\nSalida temporal: " + m4a.getAbsolutePath(); }
+                } catch (Throwable error) { result = "Falló la prueba de audio real: " + error.getClass().getSimpleName() + ": " + error.getMessage(); }
+                final String message = result;
+                runOnUiThread(() -> { engineStatus.setText(message); sourceEncodeTestButton.setEnabled(selectedAudio != null); });
+            }).start();
+        });
+
         convertButton = new Button(this);
         convertButton.setText("CONVERTIR A M4A");
         convertButton.setEnabled(false);
@@ -391,7 +415,8 @@ public class MainActivity extends Activity {
                 for (int i = 0; i < ((LinearLayout) selectedFile.getParent()).getChildCount(); i++) {
                     View child = ((LinearLayout) selectedFile.getParent()).getChildAt(i);
                     if (child instanceof Button
-                            && "PROBAR DECODIFICACIÓN DEL AUDIO".contentEquals(((Button) child).getText())) {
+                            && ("PROBAR DECODIFICACIÓN DEL AUDIO".contentEquals(((Button) child).getText())
+                            || "PROBAR CODIFICACIÓN DE AUDIO REAL".contentEquals(((Button) child).getText()))) {
                         child.setEnabled(true);
                     }
                 }
