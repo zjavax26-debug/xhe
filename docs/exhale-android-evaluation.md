@@ -78,3 +78,15 @@ The user installed workflow run 42377941938 and reran **PROBAR ESCRITURA M4A**. 
 
 This validates container parsing and track discovery on the target device. It does **not** yet prove the decoder can configure for USAC AOT 42 or successfully output PCM. The next device test must actually configure `MediaCodec`, feed the extracted sample data, and confirm decoded PCM output.
 
+## On-device USAC decode validation (TECNO / Android 12)
+
+The user installed workflow run 42384032410 and ran **PROBAR ESCRITURA M4A**. The result shown on-device was:
+
+- Exhale generated an 890-byte M4A fixture containing 3 USAC access units.
+- Android MediaExtractor recognized `audio/mp4a-latm`, 48,000 Hz, 2 channels.
+- Android MediaCodec successfully decoded the fixture and produced 12,288 bytes of PCM at 48,000 Hz, 2 channels.
+
+This is direct device evidence that the test fixture's Exhale USAC stream, MP4 container, Android extractor and Android decoder interoperate on this TECNO / Android 12 device. It is still a short silent fixture, not a real music conversion test.
+
+Next work: port the upstream Exhale application's exact frame scheduling, lookahead, pre-roll, post-roll, duration and writer finalization for arbitrary-length PCM; then connect AudioPcmDecoder, convert PCM16 samples to Exhale's signed 24-bit left-aligned int32 representation, and test real input files. Keep conversion disabled until real-file output has been validated for multiple durations and playback.
+
