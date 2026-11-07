@@ -156,8 +156,14 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
     ExhaleEncAPI* enc=exhaleCreate(pcm.data(),au.data(),rate,channels,frame,period,mode,true,false);
     if(!enc){close(inFd);return env->NewStringUTF("Conversión: exhaleCreate falló");}
     uint32_t ascSize=0;
-    if(exhaleInitEncoder(enc,asc.data(),&ascSize)!=0||ascSize<5||ascSize>asc.size()){
-        exhaleDelete(enc);close(inFd);return env->NewStringUTF("Conversión: Exhale no pudo crear ASC/USAC");
+    unsigned initCode=exhaleInitEncoder(enc,asc.data(),&ascSize);
+    if(initCode!=0||ascSize<5||ascSize>asc.size()){
+        exhaleDelete(enc);close(inFd);
+        char detail[160];
+        std::snprintf(detail,sizeof(detail),
+            "Conversión: Exhale rechazó la configuración (código %u, ASC %u bytes, %u Hz, %u canales, frame %u, modo %u)",
+            initCode,ascSize,rate,channels,frame,mode);
+        return env->NewStringUTF(detail);
     }
     int outFd=open(outPath.c_str(),O_CREAT|O_TRUNC|O_RDWR,0600);
     if(outFd<0){exhaleDelete(enc);close(inFd);return env->NewStringUTF("Conversión: no se pudo crear el M4A");}
