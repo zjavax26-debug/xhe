@@ -289,6 +289,10 @@ public class MainActivity extends Activity {
             if (format.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) {
                 details += ", " + format.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT) + " canales";
             }
+            if (format.containsKey(android.media.MediaFormat.KEY_DURATION)) {
+                details += ", duración declarada " + String.format(Locale.US, "%.3f s",
+                        format.getLong(android.media.MediaFormat.KEY_DURATION) / 1_000_000.0);
+            }
             boolean decoderFound = false;
             for (android.media.MediaCodecInfo info :
                     new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS)
@@ -328,8 +332,10 @@ public class MainActivity extends Activity {
             decoder.start();
             started = true;
             android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
-            int iterations = 0;
-            while (!outputDone && iterations++ < 10000) {
+            // Long music tracks can require more than 10,000 dequeue cycles.
+            // Use a wall-clock safety deadline instead of a fixed iteration cap.
+            long deadlineMs = android.os.SystemClock.elapsedRealtime() + 10L * 60L * 1000L;
+            while (!outputDone && android.os.SystemClock.elapsedRealtime() < deadlineMs) {
                 if (!inputDone) {
                     int inputIndex = decoder.dequeueInputBuffer(10000);
                     if (inputIndex >= 0) {
@@ -360,7 +366,7 @@ public class MainActivity extends Activity {
                     // The decoded PCM format is available from decoder.getOutputFormat().
                 }
             }
-            if (!outputDone) return "MediaCodec no terminó la decodificación (límite de seguridad).";
+            if (!outputDone) return "MediaCodec no terminó la decodificación en 10 minutos (límite de seguridad); PCM recibido: " + decodedBytes + " bytes.";
             if (decodedBytes <= 0) {
                 return "MediaCodec llegó al final, pero no produjo PCM.";
             }
