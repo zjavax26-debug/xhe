@@ -45,10 +45,11 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleProbe(JNIEnv* env, jclass) 
     if (!encoder) return env->NewStringUTF("Exhale: no se pudo crear el codificador");
     uint32_t ascBytes = 0;
     unsigned initResult = exhaleInitEncoder(encoder, asc.data(), &ascBytes);
-    unsigned lookaheadBytes = initResult == 0 ? exhaleEncodeLookahead(encoder) : 0;
+    // Exhale returns 1 when initEncoder successfully creates the ASC.
+    unsigned lookaheadBytes = initResult == 1 ? exhaleEncodeLookahead(encoder) : 0;
     unsigned frameBytes = lookaheadBytes >= 3 ? exhaleEncodeFrame(encoder) : 0;
     exhaleDelete(encoder);
-    if (initResult || ascBytes == 0 || lookaheadBytes < 3 || frameBytes < 3)
+    if (initResult != 1 || ascBytes == 0 || lookaheadBytes < 3 || frameBytes < 3)
         return env->NewStringUTF("Exhale: la prueba no produjo tramas válidas");
     char message[160];
     std::snprintf(message, sizeof(message),
@@ -71,8 +72,11 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleMp4Probe(
     ExhaleEncAPI* enc=exhaleCreate(pcm.data(),au.data(),rate,ch,frame,period,mode,true,false);
     if(!enc) return env->NewStringUTF("M4A: exhaleCreate falló");
     uint32_t ascSize=0;
-    if(exhaleInitEncoder(enc,asc.data(),&ascSize)!=0 || ascSize<5 || ascSize>asc.size()){
-        exhaleDelete(enc); return env->NewStringUTF("M4A: ASC inválida");
+    unsigned initCode=exhaleInitEncoder(enc,asc.data(),&ascSize);
+    if(initCode!=1 || ascSize<5 || ascSize>asc.size()){
+        exhaleDelete(enc); char m[96];
+        std::snprintf(m,sizeof(m),"M4A: ASC inválida (init=%u, bytes=%u)",initCode,ascSize);
+        return env->NewStringUTF(m);
     }
     int fd=open(path.c_str(),O_CREAT|O_TRUNC|O_RDWR,0600);
     if(fd<0){exhaleDelete(enc);return env->NewStringUTF("M4A: no se pudo crear");}
@@ -157,7 +161,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
     if(!enc){close(inFd);return env->NewStringUTF("Conversión: exhaleCreate falló");}
     uint32_t ascSize=0;
     unsigned initCode=exhaleInitEncoder(enc,asc.data(),&ascSize);
-    if(initCode!=0||ascSize<5||ascSize>asc.size()){
+    if(initCode!=1||ascSize<5||ascSize>asc.size()){
         exhaleDelete(enc);close(inFd);
         char detail[160];
         std::snprintf(detail,sizeof(detail),
