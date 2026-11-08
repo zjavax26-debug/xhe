@@ -136,10 +136,12 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
         dataOffset=payload+size+(size&1);
     }
     if(!haveFmt||!haveData||format!=1||bits!=16||(channels!=1&&channels!=2)
-       ||(rate!=44100&&rate!=48000)||dataBytes<static_cast<uint32_t>(channels*2*768)){
+       ||(rate!=44100&&rate!=48000)||dataBytes<static_cast<uint32_t>(channels*2*1024)){
         close(inFd);return env->NewStringUTF("Conversión: se requiere WAV PCM16 mono/estéreo a 44.1 o 48 kHz y al menos 768 muestras");
     }
-    const unsigned frame=768,mode=5,period=50,bytesPerFrame=channels*2;
+    const unsigned frame=1024,mode=5;
+    const unsigned period=(rate<48000?(rate-320u):(50u<<10u))/frame;
+    const unsigned bytesPerFrame=channels*2;
     const uint64_t totalSamples=dataBytes/bytesPerFrame;
     dataBytes=static_cast<uint32_t>(totalSamples*bytesPerFrame);
     std::vector<int32_t> pcm(frame*channels*4,0);
