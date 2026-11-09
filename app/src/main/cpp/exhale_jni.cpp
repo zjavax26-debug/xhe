@@ -109,7 +109,7 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleMp4Probe(
 // upstream gapless priming/flush behavior have been ported and verified.
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
-        JNIEnv* env, jclass, jstring inputPath, jstring outputPath) {
+        JNIEnv* env, jclass, jstring inputPath, jstring outputPath, jint requestedBitrateKbps) {
     if(!inputPath||!outputPath) return env->NewStringUTF("Conversión: ruta vacía");
     const char* inChars=env->GetStringUTFChars(inputPath,nullptr);
     const char* outChars=env->GetStringUTFChars(outputPath,nullptr);
@@ -139,7 +139,16 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
        ||(rate!=44100&&rate!=48000)||dataBytes<static_cast<uint32_t>(channels*2*1024)){
         close(inFd);return env->NewStringUTF("Conversión: se requiere WAV PCM16 mono/estéreo a 44.1 o 48 kHz y al menos 768 muestras");
     }
-    const unsigned frame=1024,mode=5;
+    const unsigned frame=1024;
+    if(requestedBitrateKbps<8||requestedBitrateKbps>512){close(inFd);return env->NewStringUTF("Conversión: bitrate solicitado fuera del rango de 8 a 512 kbps");}
+    unsigned mode=0;
+    unsigned nominalBitrate=channels*24;
+    unsigned bestDifference=UINT_MAX;
+    for(unsigned candidate=0;candidate<=9;++candidate){
+        const unsigned candidateBitrate=channels*(24+candidate*8);
+        const unsigned difference=static_cast<unsigned>(std::abs(static_cast<int>(candidateBitrate)-requestedBitrateKbps));
+        if(difference<bestDifference){bestDifference=difference;mode=candidate;nominalBitrate=candidateBitrate;}
+    }
     const unsigned period=(rate<48000?(rate-320u):(50u<<10u))/frame;
     const unsigned bytesPerFrame=channels*2;
     const uint64_t totalSamples=dataBytes/bytesPerFrame;
@@ -176,32 +185,39 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
     BasicMP4Writer writer;int rc=0;uint64_t written=0;unsigned frames=0;
     // The encoder's 25/16 look-ahead is retained; this initial experimental
     // writer uses the tested writer API but is not yet a gapless-finalized path.
-    if(writer.open(outFd,rate,channels,24,frame,0,period,asc.data(),ascSize)!=0)rc=-1;
+    if(writer.open(outFd,rate,channels,24,frame,0,period,asc.data(),ascSize,0,static_cast<char>(mode))!=0)rc=-1;
     if(!rc&&writer.initHeader(static_cast<uint32_t>(std::min<uint64_t>(totalSamples,0xFFFFFFFFu)),0)<666)rc=-2;
-    unsigned n=0;
+    unsigned n=0,previousAuBytes=0,maxSmoothedAuBytes=0;
+    uint64_t byteCount=0;
+    auto writeEncodedFrame=[&](unsigned stage)->bool{
+        const unsigned bytes=exhaleEncodeFrame(enc);
+        if(bytes<3||bytes>au.size()||writer.addFrameAU(au.data(),bytes)!=static_cast<int>(bytes)){rc=stage;return false;}
+        const unsigned smoothed=(previousAuBytes==0?bytes:(previousAuBytes+bytes)>>1);
+        maxSmoothedAuBytes=std::max(maxSmoothedAuBytes,smoothed);
+        previousAuBytes=bytes;byteCount+=bytes;++frames;return true;
+    };
     if(!rc){n=exhaleEncodeLookahead(enc);if(n<3||n>au.size())rc=-3;}
-    // The first look-ahead AU primes the encoder; upstream exhaleApp does not
-    // write it as an ordinary source frame. Feed subsequent real PCM frames.
+    // The look-ahead call primes Exhale. Subsequent real PCM blocks are
+    // supplied to encodeFrame; the last block is submitted once more to drain.
     for(uint64_t pos=frame;!rc&&pos<totalSamples;pos+=frame){
-        loadFrame(pos);
-        n=exhaleEncodeFrame(enc);
-        if(!writeAu(writer,au,n)){rc=-4;break;}
-        ++frames;written+=std::min<uint64_t>(frame,totalSamples-pos);
+        if(!loadFrame(pos)){rc=-4;break;}
+        if(!writeEncodedFrame(-5))break;
     }
-    // Encode the terminal frame using the last input block, as exhaleApp does.
     if(!rc){
-        n=exhaleEncodeFrame(enc);
-        if(!writeAu(writer,au,n))rc=-5;else ++frames;
+        if(!writeEncodedFrame(-6)){}
     }
-    uint64_t approxBitrate=channels*((24+mode*8));
-    if(!rc&&writer.finishFile(static_cast<unsigned>(approxBitrate),static_cast<unsigned>(approxBitrate),
-                              static_cast<uint32_t>(std::min<uint64_t>(totalSamples,0xFFFFFFFFu)))<=0)rc=-6;
+    const uint64_t actualLength=totalSamples;
+    const uint64_t avgRate=(actualLength>0?((actualLength>>1)+8*(byteCount+4ULL*frames)*rate)/actualLength:0);
+    const uint64_t maxRate=((frame>>1)+8ULL*(maxSmoothedAuBytes+4)*rate)/frame;
+    if(!rc&&writer.finishFile(static_cast<unsigned>(std::min<uint64_t>(avgRate,UINT_MAX)),
+                              static_cast<unsigned>(std::min<uint64_t>(maxRate,UINT_MAX)),
+                              static_cast<uint32_t>(std::min<uint64_t>(totalSamples,0xFFFFFFFFu)))<=0)rc=-7;
     exhaleDelete(enc);close(inFd);struct stat outStat{};
     if(fstat(outFd,&outStat)!=0||outStat.st_size<=600)rc=-7;
     close(outFd);
     if(rc){unlink(outPath.c_str());char msg[128];snprintf(msg,sizeof(msg),"Codificación experimental falló (etapa %d)",rc);return env->NewStringUTF(msg);}
     char msg[256];snprintf(msg,sizeof(msg),
-        "M4A experimental generado: %lld bytes, %u tramas USAC. Duración/retardo aún por validar; no usar como conversión final.",
-        (long long)outStat.st_size,frames);
+        "M4A experimental generado: %lld bytes, %u tramas USAC, modo Exhale %u (nominal %u kbps). Duración/retardo aún por validar; no usar como conversión final.",
+        (long long)outStat.st_size,frames,mode,nominalBitrate);
     return env->NewStringUTF(msg);
 }
