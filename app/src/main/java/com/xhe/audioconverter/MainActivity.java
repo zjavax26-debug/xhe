@@ -27,7 +27,7 @@ public class MainActivity extends Activity {
     private static native String nativeEncoderProbe(int sampleRate, int channels, int bitrate);
     private static native String nativeExhaleProbe();
     private static native String nativeExhaleMp4Probe(String outputPath);
-    private static native String nativeExhaleEncodeWav(String inputPath, String outputPath);
+    private static native String nativeExhaleEncodeWav(String inputPath, String outputPath, int requestedBitrateKbps);
     private static final int MIN_BITRATE_KBPS = 8;   // Provisional; validate against libxaac.
     private static final int MAX_BITRATE_KBPS = 512; // Provisional; validate against libxaac.
     private static final int PICK_AUDIO_REQUEST = 1001;
@@ -127,7 +127,7 @@ public class MainActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
-        TextView range = text("8–512 kbps (rango provisional; pendiente de validar)", 12, false);
+        TextView range = text("Exhale usa presets discretos; se elige el más cercano al valor solicitado.", 12, false);
         range.setTextColor(0xFF777777);
         root.addView(range);
 
@@ -169,7 +169,7 @@ public class MainActivity extends Activity {
         sampleRateSpinner.setSelection(3);
         root.addView(sampleRateSpinner, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
-        TextView note = text("La conversión xHE-AAC todavía está en desarrollo. Esta versión prepara la interfaz; no crea archivos AAC falsos ni cambia extensiones.", 13, false);
+        TextView note = text("Prueba experimental xHE-AAC: genera M4A reales para validación. El bitrate se ajusta a los presets disponibles de Exhale; todavía no es la conversión definitiva.", 13, false);
         note.setTextColor(0xFF8A4B00);
         note.setPadding(0, dp(16), 0, dp(12));
         root.addView(note);
@@ -243,7 +243,7 @@ public class MainActivity extends Activity {
                     AudioPcmDecoder.Result decoded = AudioPcmDecoder.decode(MainActivity.this, selectedAudio, wav);
                     if (decoded.sampleRate != 44100 && decoded.sampleRate != 48000) throw new java.io.IOException("Esta prueba admite 44.1 o 48 kHz; el archivo tiene " + decoded.sampleRate + " Hz.");
                     double sourceSeconds = decoded.pcmBytes / (double) (decoded.sampleRate * decoded.channels * 2);
-                    result = nativeExhaleEncodeWav(wav.getAbsolutePath(), m4a.getAbsolutePath());
+                    result = nativeExhaleEncodeWav(wav.getAbsolutePath(), m4a.getAbsolutePath(), bitrateKbps);
                     if (result.startsWith("M4A experimental generado")) {
                         long outputDurationUs = getM4aDeclaredDurationUs(m4a);
                         if (outputDurationUs >= 0) {
