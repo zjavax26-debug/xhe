@@ -2,6 +2,9 @@ package com.xhe.audioconverter;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ContentValues;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
@@ -20,6 +23,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.Locale;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public class MainActivity extends Activity {
     static { System.loadLibrary("xhe_jni"); System.loadLibrary("exhale_jni"); }
@@ -40,6 +47,8 @@ public class MainActivity extends Activity {
     private EditText bitrateInput;
     private Button convertButton;
     private TextView engineStatus;
+    private File lastExperimentalOutput;
+    private Button saveExperimentalButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -258,9 +267,25 @@ public class MainActivity extends Activity {
                     }
                 } catch (Throwable error) { result = "Falló la prueba de audio real: " + error.getClass().getSimpleName() + ": " + error.getMessage(); }
                 final String message = result;
-                runOnUiThread(() -> { engineStatus.setText(message); sourceEncodeTestButton.setEnabled(selectedAudio != null); });
+                runOnUiThread(() -> {
+                    engineStatus.setText(message);
+                    sourceEncodeTestButton.setEnabled(selectedAudio != null);
+                    if (result.startsWith("M4A experimental generado") && m4a.isFile() && m4a.length() > 0) {
+                        lastExperimentalOutput = m4a;
+                        saveExperimentalButton.setEnabled(true);
+                    } else {
+                        lastExperimentalOutput = null;
+                        saveExperimentalButton.setEnabled(false);
+                    }
+                });
             }).start();
         });
+
+        saveExperimentalButton = new Button(this);
+        saveExperimentalButton.setText("GUARDAR M4A EXPERIMENTAL EN MÚSICA");
+        saveExperimentalButton.setEnabled(false);
+        root.addView(saveExperimentalButton, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)));
+        saveExperimentalButton.setOnClickListener(v -> saveExperimentalOutput());
 
         convertButton = new Button(this);
         convertButton.setText("CONVERTIR A M4A");
