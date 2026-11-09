@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include <cstdlib>
+#include <climits>
 #include <string>
 #include <fcntl.h>
 #include <unistd.h>
