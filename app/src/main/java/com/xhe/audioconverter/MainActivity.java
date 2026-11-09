@@ -243,6 +243,8 @@ public class MainActivity extends Activity {
         sourceEncodeTestButton.setOnClickListener(v -> {
             if (selectedAudio == null) return;
             sourceEncodeTestButton.setEnabled(false);
+            lastExperimentalOutput = null;
+            saveExperimentalButton.setEnabled(false);
             engineStatus.setText("Decodificando y codificando el audio completo con Exhale...");
             new Thread(() -> {
                 String result;
@@ -509,6 +511,8 @@ public class MainActivity extends Activity {
                 getContentResolver().takePersistableUriPermission(
                         selectedAudio, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 selectedFile.setText(selectedAudio.getLastPathSegment());
+                lastExperimentalOutput = null;
+                if (saveExperimentalButton != null) saveExperimentalButton.setEnabled(false);
                 for (int i = 0; i < ((LinearLayout) selectedFile.getParent()).getChildCount(); i++) {
                     View child = ((LinearLayout) selectedFile.getParent()).getChildAt(i);
                     if (child instanceof Button
