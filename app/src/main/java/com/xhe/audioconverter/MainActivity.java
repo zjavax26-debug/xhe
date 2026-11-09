@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
                     double seconds = decoded.pcmBytes
                             / (double) (decoded.sampleRate * decoded.channels * 2);
                     result = String.format(Locale.US,
-                            "PCM de entrada OK: %d Hz, %d canales, %.3f s, %d bytes\\nWAV temporal: %s",
+                            "PCM de entrada OK: %d Hz, %d canales, %.3f s, %d bytes\nWAV temporal: %s",
                             decoded.sampleRate, decoded.channels, seconds,
                             decoded.pcmBytes, decoded.wavFile.getAbsolutePath());
                 } catch (Exception error) {
@@ -212,8 +212,8 @@ public class MainActivity extends Activity {
                 try {
                     result = nativeExhaleMp4Probe(testFile.getAbsolutePath());
                     if (result.startsWith("M4A writer OK")) {
-                        result += "\\n" + inspectM4aWithAndroid(testFile);
-                        result += "\\nArchivo de prueba: " + testFile.getAbsolutePath();
+                        result += "\n" + inspectM4aWithAndroid(testFile);
+                        result += "\nArchivo de prueba: " + testFile.getAbsolutePath();
                     }
                 } catch (Throwable error) {
                     result = "Error al probar el escritor M4A: "
@@ -248,13 +248,13 @@ public class MainActivity extends Activity {
                         long outputDurationUs = getM4aDeclaredDurationUs(m4a);
                         if (outputDurationUs >= 0) {
                             double outputSeconds = outputDurationUs / 1_000_000.0;
-                            result += String.format(Locale.US, "\\nDuración fuente PCM: %.3f s; duración M4A: %.3f s; diferencia: %.3f s",
+                            result += String.format(Locale.US, "\nDuración fuente PCM: %.3f s; duración M4A: %.3f s; diferencia: %.3f s",
                                     sourceSeconds, outputSeconds, outputSeconds - sourceSeconds);
                         } else {
-                            result += String.format(Locale.US, "\\nDuración fuente PCM: %.3f s; duración M4A: no disponible", sourceSeconds);
+                            result += String.format(Locale.US, "\nDuración fuente PCM: %.3f s; duración M4A: no disponible", sourceSeconds);
                         }
-                        result += "\\n" + inspectM4aWithAndroid(m4a);
-                        result += "\\nSalida temporal: " + m4a.getAbsolutePath();
+                        result += "\n" + inspectM4aWithAndroid(m4a);
+                        result += "\nSalida temporal: " + m4a.getAbsolutePath();
                     }
                 } catch (Throwable error) { result = "Falló la prueba de audio real: " + error.getClass().getSimpleName() + ": " + error.getMessage(); }
                 final String message = result;
@@ -336,9 +336,9 @@ public class MainActivity extends Activity {
                 }
             }
             if (!decoderFound) {
-                return details + "\\nAndroid no anuncia un decodificador para " + mime + ".";
+                return details + "\nAndroid no anuncia un decodificador para " + mime + ".";
             }
-            return details + "\\n" + decodeM4aTrack(extractor, audioTrack, format, mime);
+            return details + "\n" + decodeM4aTrack(extractor, audioTrack, format, mime);
         } catch (Exception error) {
             return "Android MediaExtractor/MediaCodec: "
                     + error.getClass().getSimpleName() + ": " + error.getMessage();
