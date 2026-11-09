@@ -298,7 +298,41 @@ public class MainActivity extends Activity {
         setContentView(scrollView);
     }
 
-    private long getM4aDeclaredDurationUs(java.io.File file) {
+    private void saveExperimentalOutput() {
+        File source = lastExperimentalOutput;
+        if (source == null || !source.isFile() || source.length() == 0) {
+            Toast.makeText(this, "Primero genera un M4A experimental.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Uri destination = null;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Audio.Media.DISPLAY_NAME, "xHE-experimental-" + System.currentTimeMillis() + ".m4a");
+            values.put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4");
+            values.put(MediaStore.Audio.Media.IS_MUSIC, 1);
+            values.put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/xHE Audio Converter");
+            destination = getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values);
+            if (destination == null) throw new java.io.IOException("Android no creó el archivo de destino.");
+            try (InputStream input = new FileInputStream(source);
+                 OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+                if (output == null) throw new java.io.IOException("No se pudo abrir el archivo de destino.");
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.read(buffer)) >= 0) {
+                    if (count > 0) output.write(buffer, 0, count);
+                }
+                output.flush();
+            }
+            Toast.makeText(this, "M4A guardado en Música/xHE Audio Converter", Toast.LENGTH_LONG).show();
+        } catch (Exception error) {
+            if (destination != null) {
+                try { getContentResolver().delete(destination, null, null); } catch (Exception ignored) { }
+            }
+            Toast.makeText(this, "No se pudo guardar el M4A: " + error.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private long getM4aDeclaredDurationUs(File file) {
         android.media.MediaExtractor extractor = new android.media.MediaExtractor();
         try {
             extractor.setDataSource(file.getAbsolutePath());
