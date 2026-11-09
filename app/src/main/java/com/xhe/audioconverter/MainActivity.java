@@ -270,7 +270,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     engineStatus.setText(message);
                     sourceEncodeTestButton.setEnabled(selectedAudio != null);
-                    if (result.startsWith("M4A experimental generado") && m4a.isFile() && m4a.length() > 0) {
+                    if (message.startsWith("M4A experimental generado") && m4a.isFile() && m4a.length() > 0) {
                         lastExperimentalOutput = m4a;
                         saveExperimentalButton.setEnabled(true);
                     } else {
