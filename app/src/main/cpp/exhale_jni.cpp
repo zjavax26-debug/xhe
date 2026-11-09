@@ -218,8 +218,10 @@ Java_com_xhe_audioconverter_MainActivity_nativeExhaleEncodeWav(
     if(fstat(outFd,&outStat)!=0||outStat.st_size<=600)rc=-7;
     close(outFd);
     if(rc){unlink(outPath.c_str());char msg[128];snprintf(msg,sizeof(msg),"Codificación experimental falló (etapa %d)",rc);return env->NewStringUTF(msg);}
-    char msg[256];snprintf(msg,sizeof(msg),
-        "M4A experimental generado: %lld bytes, %u tramas USAC, modo Exhale %u (nominal %u kbps). Duración/retardo aún por validar; no usar como conversión final.",
-        (long long)outStat.st_size,frames,mode,nominalBitrate);
+    char msg[320];snprintf(msg,sizeof(msg),
+        "M4A experimental generado: %lld bytes, %u tramas USAC, modo %u (nominal %u kbps), promedio medido %llu kbps, pico estimado %llu kbps. Duración declarada verificada; retardo, alineación y calidad aún pendientes.",
+        (long long)outStat.st_size,frames,mode,nominalBitrate,
+        static_cast<unsigned long long>((avgRate+500)/1000),
+        static_cast<unsigned long long>((maxRate+500)/1000));
     return env->NewStringUTF(msg);
 }
