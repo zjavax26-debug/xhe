@@ -170,12 +170,12 @@ public class MainActivity extends Activity {
 
         root.addView(section("FRECUENCIA DE MUESTREO"));
         Spinner sampleRateSpinner = new Spinner(this);
-        String[] sampleRates = {"22.05 kHz", "24 kHz", "32 kHz", "44.1 kHz", "48 kHz"};
+        String[] sampleRates = {"Automática (conserva la frecuencia de entrada)"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, sampleRates);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         sampleRateSpinner.setAdapter(adapter);
-        sampleRateSpinner.setSelection(3);
+        sampleRateSpinner.setEnabled(false);
         root.addView(sampleRateSpinner, params(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
         TextView note = text("Prueba experimental xHE-AAC: genera M4A reales para validación. El bitrate se ajusta a los presets disponibles de Exhale; todavía no es la conversión definitiva.", 13, false);
