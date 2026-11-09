@@ -242,8 +242,20 @@ public class MainActivity extends Activity {
                 try {
                     AudioPcmDecoder.Result decoded = AudioPcmDecoder.decode(MainActivity.this, selectedAudio, wav);
                     if (decoded.sampleRate != 44100 && decoded.sampleRate != 48000) throw new java.io.IOException("Esta prueba admite 44.1 o 48 kHz; el archivo tiene " + decoded.sampleRate + " Hz.");
+                    double sourceSeconds = decoded.pcmBytes / (double) (decoded.sampleRate * decoded.channels * 2);
                     result = nativeExhaleEncodeWav(wav.getAbsolutePath(), m4a.getAbsolutePath());
-                    if (result.startsWith("M4A experimental generado")) { result += "\\n" + inspectM4aWithAndroid(m4a); result += "\\nSalida temporal: " + m4a.getAbsolutePath(); }
+                    if (result.startsWith("M4A experimental generado")) {
+                        long outputDurationUs = getM4aDeclaredDurationUs(m4a);
+                        if (outputDurationUs >= 0) {
+                            double outputSeconds = outputDurationUs / 1_000_000.0;
+                            result += String.format(Locale.US, "\\nDuración fuente PCM: %.3f s; duración M4A: %.3f s; diferencia: %.3f s",
+                                    sourceSeconds, outputSeconds, outputSeconds - sourceSeconds);
+                        } else {
+                            result += String.format(Locale.US, "\\nDuración fuente PCM: %.3f s; duración M4A: no disponible", sourceSeconds);
+                        }
+                        result += "\\n" + inspectM4aWithAndroid(m4a);
+                        result += "\\nSalida temporal: " + m4a.getAbsolutePath();
+                    }
                 } catch (Throwable error) { result = "Falló la prueba de audio real: " + error.getClass().getSimpleName() + ": " + error.getMessage(); }
                 final String message = result;
                 runOnUiThread(() -> { engineStatus.setText(message); sourceEncodeTestButton.setEnabled(selectedAudio != null); });
@@ -259,6 +271,26 @@ public class MainActivity extends Activity {
         scrollView.setFillViewport(true);
         scrollView.addView(root);
         setContentView(scrollView);
+    }
+
+    private long getM4aDeclaredDurationUs(java.io.File file) {
+        android.media.MediaExtractor extractor = new android.media.MediaExtractor();
+        try {
+            extractor.setDataSource(file.getAbsolutePath());
+            for (int i = 0; i < extractor.getTrackCount(); i++) {
+                android.media.MediaFormat format = extractor.getTrackFormat(i);
+                String mime = format.getString(android.media.MediaFormat.KEY_MIME);
+                if (mime != null && mime.startsWith("audio/")
+                        && format.containsKey(android.media.MediaFormat.KEY_DURATION)) {
+                    return format.getLong(android.media.MediaFormat.KEY_DURATION);
+                }
+            }
+        } catch (Exception ignored) {
+            // The detailed inspector below will report parser failures.
+        } finally {
+            extractor.release();
+        }
+        return -1;
     }
 
     // Ask Android's own ISO-BMFF parser and codec registry to inspect the
